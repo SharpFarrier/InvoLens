@@ -1,0 +1,3081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InvoLens — Sabi Wabi Innovations LLP</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --surface-2: #f5f5f4;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-muted: #57534e;
+    --text-faint: #a8a29e;
+    --accent: #b45309;
+    --accent-hover: #92400e;
+    --accent-soft: #fef3c7;
+    --success: #166534;
+    --success-soft: #dcfce7;
+    --danger: #991b1b;
+    --danger-soft: #fee2e2;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.03);
+    --radius: 6px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  /* Header */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .brand-mark {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    color: white;
+    border-radius: 6px;
+    display: grid; place-items: center;
+    font-weight: 700; font-size: 14px;
+  }
+  .brand-name { font-weight: 600; font-size: 15px; }
+  .brand-sub { color: var(--text-muted); font-size: 12px; }
+  .top-actions { display: flex; gap: 8px; align-items: center; }
+  .auth-pill {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--text-muted);
+  }
+  .auth-pill.connected { background: var(--success-soft); color: var(--success); }
+  .auth-pill.local { background: var(--accent-soft); color: var(--accent); }
+
+  /* Tabs */
+  .tabs {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex; gap: 4px;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 12px 16px;
+    border: none; background: none;
+    font: inherit; color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 500;
+  }
+
+  /* Layout */
+  .page { padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 16px; flex-wrap: wrap;
+  }
+  .page-title { font-size: 20px; font-weight: 600; margin: 0; }
+  .page-sub { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    font: inherit; font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .btn:hover { background: var(--surface-2); border-color: var(--text-faint); }
+  .btn-primary {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-ghost { border-color: transparent; }
+  .btn-danger { color: var(--danger); }
+  .btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-size: 14px; font-weight: 600;
+    margin: 0 0 4px 0;
+  }
+  .card-sub {
+    font-size: 12px; color: var(--text-muted);
+    margin: 0 0 16px 0;
+  }
+
+  /* Forms */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 16px;
+  }
+  .form-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .form-grid .full { grid-column: 1 / -1; }
+  label { display: block; }
+  .label-text {
+    font-size: 12px; color: var(--text-muted);
+    margin-bottom: 4px; font-weight: 500;
+  }
+  input[type="text"], input[type="number"], input[type="email"], input[type="date"],
+  textarea, select {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    font: inherit; font-size: 13px;
+    background: var(--surface);
+    color: var(--text);
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  textarea { resize: vertical; min-height: 60px; font-family: inherit; }
+  .help { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
+
+  /* Tables */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .data-table th {
+    text-align: left;
+    padding: 8px 10px;
+    background: var(--surface-2);
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .data-table tr:hover td { background: var(--surface-2); }
+  .data-table input { padding: 4px 6px; font-size: 12px; }
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex; gap: 8px; align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .toolbar input[type="text"] {
+    flex: 1; min-width: 220px;
+  }
+  .toolbar .right { margin-left: auto; display: flex; gap: 8px; }
+
+  /* Empty states */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .empty-icon {
+    font-size: 32px; margin-bottom: 12px; opacity: 0.5;
+  }
+  .empty-title { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .empty-sub { font-size: 13px; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 20px; right: 20px;
+    padding: 10px 16px;
+    background: var(--text);
+    color: white;
+    border-radius: var(--radius);
+    font-size: 13px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    z-index: 1000;
+    animation: slideIn 0.2s ease;
+  }
+  .toast.error { background: var(--danger); }
+  .toast.success { background: var(--success); }
+  @keyframes slideIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* Modals */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 100;
+    display: grid; place-items: center;
+    padding: 20px;
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 24px;
+    max-width: 600px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+  }
+  .modal-title { margin: 0 0 16px 0; font-size: 16px; font-weight: 600; }
+
+  /* Stat row */
+  .stat-row {
+    display: flex; gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    flex: 1; min-width: 120px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 22px; font-weight: 600; margin-top: 2px; }
+
+  /* Tab content */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Utilities */
+  .row { display: flex; gap: 8px; align-items: center; }
+  .grow { flex: 1; }
+  .text-muted { color: var(--text-muted); }
+  .text-faint { color: var(--text-faint); }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 500;
+    background: var(--surface-2); color: var(--text-muted);
+  }
+  .pill.success { background: var(--success-soft); color: var(--success); }
+  .pill.warn { background: var(--accent-soft); color: var(--accent); }
+  .hidden { display: none !important; }
+
+  /* Footer note */
+  .footer-note {
+    text-align: center; padding: 16px;
+    color: var(--text-faint); font-size: 11px;
+  }
+
+  /* ============ INVOICE FORM ============ */
+  .invoice-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) {
+    .invoice-layout { grid-template-columns: 1fr; }
+  }
+  .summary-sticky {
+    position: sticky; top: 100px;
+  }
+
+  /* Autocomplete */
+  .autocomplete-wrap { position: relative; }
+  .autocomplete-list {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 20;
+    margin-top: 2px;
+  }
+  .autocomplete-item {
+    padding: 8px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .autocomplete-item:last-child { border-bottom: none; }
+  .autocomplete-item:hover, .autocomplete-item.active {
+    background: var(--accent-soft);
+  }
+  .autocomplete-item .ac-primary {
+    font-weight: 500; color: var(--text);
+    margin-bottom: 2px;
+  }
+  .autocomplete-item .ac-secondary {
+    font-size: 11px; color: var(--text-muted);
+  }
+  .autocomplete-empty {
+    padding: 10px; color: var(--text-faint);
+    font-size: 12px; text-align: center;
+  }
+
+  /* Line items */
+  .line-items {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+  .line-item {
+    display: grid;
+    grid-template-columns: 28px 1fr 70px 110px 36px;
+    gap: 10px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    align-items: start;
+  }
+  .line-item:last-child { border-bottom: none; }
+  .line-item .li-num {
+    font-weight: 600;
+    color: var(--text-muted);
+    padding-top: 8px;
+    text-align: center;
+  }
+  .line-item .li-product {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .line-item .li-product .li-product-name {
+    color: var(--text);
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+  .line-item .li-product .li-product-meta {
+    font-size: 11px;
+  }
+  .li-remove {
+    background: none; border: none;
+    color: var(--text-faint);
+    cursor: pointer; font-size: 18px;
+    padding: 4px;
+    margin-top: 4px;
+  }
+  .li-remove:hover { color: var(--danger); }
+
+  /* Summary panel */
+  .summary-row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+  .summary-row.sub {
+    color: var(--text-muted); font-size: 12px;
+    padding: 3px 0;
+  }
+  .summary-row.total {
+    border-top: 2px solid var(--text);
+    margin-top: 8px;
+    padding-top: 10px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .summary-row .label { color: var(--text-muted); }
+  .summary-row.total .label { color: var(--text); }
+  .summary-row .value { font-variant-numeric: tabular-nums; }
+  .gst-mode-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--accent-soft);
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 8px;
+  }
+  .gst-mode-pill.intra { background: var(--success-soft); color: var(--success); }
+
+  /* Replacement banner */
+  .replacement-banner {
+    padding: 10px 14px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    color: var(--accent-hover);
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+
+  /* ============ PRINT VIEW ============ */
+  #printView {
+    display: none;
+    background: white;
+    color: #000;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  #printView .print-page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 12mm 12mm;
+    margin: 0 auto;
+    background: white;
+    box-sizing: border-box;
+  }
+  #printView .print-title {
+    text-align: center;
+    font-size: 16px;
+    font-weight: bold;
+    background: #d9d9d9;
+    padding: 6px;
+    margin: 0 0 0 0;
+    border: 1px solid #000;
+  }
+  #printView table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  #printView .seller-table td {
+    border: 1px solid #000;
+    padding: 4px 8px;
+    vertical-align: top;
+  }
+  #printView .seller-table .label {
+    font-weight: bold;
+    background: #f5f5f5;
+    width: 90px;
+  }
+  #printView .items-table th, #printView .items-table td {
+    border: 1px solid #000;
+    padding: 5px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  #printView .items-table th {
+    background: #d9d9d9;
+    font-weight: bold;
+    text-align: center;
+    font-size: 10.5px;
+  }
+  #printView .items-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  #printView .items-table .ctr { text-align: center; }
+  #printView .summary-table td {
+    border: 1px solid #000;
+    padding: 5px 8px;
+  }
+  #printView .summary-table .label {
+    text-align: right; font-weight: 500;
+    background: #f9f9f9;
+  }
+  #printView .summary-table .value {
+    text-align: right; font-variant-numeric: tabular-nums;
+    width: 100px;
+  }
+  #printView .total-row td {
+    background: #d9d9d9 !important;
+    font-weight: bold; font-size: 12px;
+  }
+  #printView .footer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 8px;
+  }
+  #printView .footer-cell {
+    border: 1px solid #000;
+    padding: 6px 8px;
+    min-height: 70px;
+  }
+  #printView .declaration {
+    margin-top: 8px;
+    padding: 6px 8px;
+    border: 1px solid #000;
+    font-size: 10px;
+    text-align: center;
+  }
+  #printView .signatory-img {
+    max-height: 50px;
+    display: block;
+    margin: 4px 0;
+  }
+  #printView .replacement-stamp {
+    color: #c00;
+    font-size: 14px;
+    font-weight: bold;
+    text-align: center;
+    border: 2px solid #c00;
+    padding: 4px;
+    margin-top: 6px;
+  }
+
+  /* Print-specific CSS */
+  @media print {
+    body * { visibility: hidden; }
+    #printView, #printView * { visibility: visible; }
+    #printView {
+      display: block !important;
+      position: absolute; top: 0; left: 0; width: 100%;
+    }
+    #printView .print-page {
+      padding: 8mm 10mm;
+      margin: 0;
+    }
+    .topbar, .tabs { display: none !important; }
+    @page { size: A4; margin: 0; }
+  }
+
+  /* Modes */
+  body.printing #printView { display: block; }
+  body.printing > *:not(#printView) { display: none; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">iL</div>
+    <div>
+      <div class="brand-name">InvoLens</div>
+      <div class="brand-sub">Sabi Wabi Innovations LLP</div>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span class="auth-pill local" id="syncStatus">Local mode</span>
+    <span class="text-faint" id="lastSyncLabel" style="font-size: 11px;"></span>
+    <button class="btn btn-sm" id="syncNowBtn" onclick="syncNow()" style="display: none;">Sync now</button>
+    <button class="btn btn-sm" id="connectDriveBtn" onclick="connectDrive()">Connect Drive</button>
+    <button class="btn btn-sm" id="disconnectDriveBtn" onclick="disconnectDrive()" style="display: none;">Disconnect</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" data-tab="invoice">New Invoice</button>
+  <button class="tab" data-tab="history">History</button>
+  <button class="tab" data-tab="customers">Customers</button>
+  <button class="tab" data-tab="products">Products</button>
+  <button class="tab" data-tab="settings">Settings</button>
+</div>
+
+<!-- ============ NEW INVOICE TAB ============ -->
+<div class="tab-content active" id="tab-invoice">
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title" id="invoiceFormTitle">New Invoice</h1>
+        <p class="page-sub">GST splits automatically based on buyer state. Total amount is inclusive of GST and shipping.</p>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="resetInvoiceForm()">Clear Form</button>
+        <button class="btn btn-primary" onclick="saveAndPrintInvoice()">Save & Print</button>
+      </div>
+    </div>
+
+    <div class="invoice-layout">
+      <!-- LEFT: form -->
+      <div>
+        <!-- Order details -->
+        <div class="card">
+          <h3 class="card-title">Order Details</h3>
+          <div class="form-grid">
+            <label>
+              <div class="label-text">Invoice No / Order ID *</div>
+              <input type="text" id="inv_order_id" placeholder="e.g. 406-4387027-7501127">
+            </label>
+            <label>
+              <div class="label-text">Invoice Date *</div>
+              <input type="date" id="inv_date">
+            </label>
+            <label class="full">
+              <div class="label-text">AWB / Tracking ID</div>
+              <input type="text" id="inv_awb" placeholder="optional, can fill after dispatch">
+            </label>
+            <label class="full">
+              <div class="row">
+                <input type="checkbox" id="inv_is_replacement" onchange="updateReplacementBanner()" style="width: auto; margin-right: 8px;">
+                <span class="label-text" style="margin: 0;">Mark as Replacement (no charge)</span>
+              </div>
+            </label>
+          </div>
+          <div class="replacement-banner hidden" id="replacementBanner">
+            ⚠️ This invoice will be marked <strong>REPLACEMENT — NO CHARGE</strong>. Tax values will still calculate but the invoice will display the replacement notice.
+          </div>
+        </div>
+
+        <!-- Consignee -->
+        <div class="card">
+          <h3 class="card-title">Consignee</h3>
+          <p class="card-sub">Type 3+ letters of name to autocomplete from past customers.</p>
+          <div class="form-grid">
+            <label class="full autocomplete-wrap">
+              <div class="label-text">Name *</div>
+              <input type="text" id="inv_cust_name" autocomplete="off" oninput="customerAutocomplete()">
+              <div class="autocomplete-list hidden" id="custAutocomplete"></div>
+            </label>
+            <label class="full">
+              <div class="label-text">Address *</div>
+              <textarea id="inv_cust_address" rows="2"></textarea>
+            </label>
+            <label>
+              <div class="label-text">State *</div>
+              <select id="inv_cust_state" onchange="recalcSummary()"></select>
+            </label>
+            <label>
+              <div class="label-text">Pincode</div>
+              <input type="text" id="inv_cust_pincode">
+            </label>
+            <label>
+              <div class="label-text">Contact</div>
+              <input type="text" id="inv_cust_contact">
+            </label>
+            <label>
+              <div class="label-text">Email <span class="text-faint">(optional)</span></div>
+              <input type="text" id="inv_cust_email">
+            </label>
+            <label class="full">
+              <div class="label-text">Buyer GSTIN <span class="text-faint">(optional, B2B only)</span></div>
+              <input type="text" id="inv_cust_gstin" placeholder="e.g. 27ABCDE1234F1Z5">
+            </label>
+          </div>
+        </div>
+
+        <!-- Line items -->
+        <div class="card">
+          <h3 class="card-title">Line Items</h3>
+          <p class="card-sub">SKU search matches across Master / Amazon / Flipkart / Website / ASIN / FSN.</p>
+          <div class="line-items" id="lineItems"></div>
+          <button class="btn btn-sm" onclick="addLineItem()">+ Add Line</button>
+        </div>
+      </div>
+
+      <!-- RIGHT: live summary -->
+      <div class="summary-sticky">
+        <div class="card">
+          <h3 class="card-title">
+            Summary
+            <span id="gstModePill" class="gst-mode-pill">—</span>
+          </h3>
+          <p class="card-sub" id="summaryHint">Add line items and select buyer state.</p>
+          <div id="summaryContent">
+            <div class="summary-row">
+              <span class="label">Lines</span>
+              <span class="value" id="sum_lines">0</span>
+            </div>
+            <div class="summary-row">
+              <span class="label">Total Qty</span>
+              <span class="value" id="sum_qty">0</span>
+            </div>
+            <div class="summary-row sub">
+              <span class="label">Sum (Inclusive)</span>
+              <span class="value" id="sum_inclusive">—</span>
+            </div>
+            <div class="summary-row sub">
+              <span class="label">Taxable Value</span>
+              <span class="value" id="sum_taxable">—</span>
+            </div>
+            <div class="summary-row sub" id="row_igst">
+              <span class="label">IGST</span>
+              <span class="value" id="sum_igst">—</span>
+            </div>
+            <div class="summary-row sub hidden" id="row_cgst">
+              <span class="label">CGST</span>
+              <span class="value" id="sum_cgst">—</span>
+            </div>
+            <div class="summary-row sub hidden" id="row_sgst">
+              <span class="label">SGST</span>
+              <span class="value" id="sum_sgst">—</span>
+            </div>
+            <div class="summary-row total">
+              <span class="label">Grand Total</span>
+              <span class="value" id="sum_grand">—</span>
+            </div>
+            <div class="summary-row sub" style="margin-top: 4px;">
+              <span class="label" style="font-style: italic;" id="sum_words">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============ HISTORY TAB ============ -->
+<div class="tab-content" id="tab-history">
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Invoice History</h1>
+        <p class="page-sub">All invoices generated. Click a row to view, edit, or reprint.</p>
+      </div>
+      <div class="row">
+        <button class="btn btn-sm" onclick="exportInvoices()">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Invoices</div>
+        <div class="stat-value" id="stat_inv_total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">This Month</div>
+        <div class="stat-value" id="stat_inv_month">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Value</div>
+        <div class="stat-value" id="stat_inv_value">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Replacements</div>
+        <div class="stat-value" id="stat_inv_repl">—</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="historySearch" placeholder="Search by order ID, customer name, SKU…" oninput="renderHistory()">
+      <select id="historyFilterMonth" onchange="renderHistory()" style="max-width: 180px;">
+        <option value="">All months</option>
+      </select>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="historyTable">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Invoice No</th>
+            <th>Consignee</th>
+            <th>State</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th>GST</th>
+            <th>AWB</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="historyTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CUSTOMERS TAB ============ -->
+<div class="tab-content" id="tab-customers">
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Customers</h1>
+        <p class="page-sub">Auto-built from invoices. Edits here update future autocompletions only.</p>
+      </div>
+      <div class="row">
+        <button class="btn btn-sm" onclick="exportCustomers()">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Customers</div>
+        <div class="stat-value" id="stat_cust_total">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Repeat Customers</div>
+        <div class="stat-value" id="stat_cust_repeat">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">States Served</div>
+        <div class="stat-value" id="stat_cust_states">—</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="customerSearch" placeholder="Search by name, contact, pincode…" oninput="renderCustomers()">
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="customersTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Address</th>
+            <th>State</th>
+            <th>Pincode</th>
+            <th>Contact</th>
+            <th>Email</th>
+            <th>GSTIN</th>
+            <th>Orders</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="customersTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PRODUCTS TAB ============ -->
+<div class="tab-content" id="tab-products">
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Products</h1>
+        <p class="page-sub">Master catalog. Operator can paste any SKU type (Master/Amazon/Flipkart/Website) — all are searchable.</p>
+      </div>
+      <div class="row">
+        <button class="btn btn-sm" onclick="exportProducts()">Export CSV</button>
+        <button class="btn btn-sm btn-primary" onclick="openAddProduct()">+ Add Product</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">Total SKUs</div>
+        <div class="stat-value" id="statTotalSKUs">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Product Families</div>
+        <div class="stat-value" id="statFamilies">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">With Custom HSN/GST</div>
+        <div class="stat-value" id="statCustom">—</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="productSearch" placeholder="Search by any SKU, ASIN, FSN, family, or description…" oninput="renderProducts()">
+      <select id="productFilterFamily" onchange="renderProducts()" style="max-width: 180px;">
+        <option value="">All families</option>
+      </select>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="productsTable">
+        <thead>
+          <tr>
+            <th>Family</th>
+            <th>Description</th>
+            <th>Master SKU</th>
+            <th>Amazon SKU</th>
+            <th>Flipkart SKU</th>
+            <th>Website SKU</th>
+            <th>ASIN</th>
+            <th>HSN <span class="text-faint">(override)</span></th>
+            <th>GST % <span class="text-faint">(override)</span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="productsTbody"></tbody>
+      </table>
+    </div>
+    <div class="footer-note">
+      Leave HSN/GST blank to use defaults from Settings. Override only when a specific SKU has a different rate.
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS TAB ============ -->
+<div class="tab-content" id="tab-settings">
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-sub">Seller details, tax defaults, and invoice preferences.</p>
+      </div>
+      <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+    </div>
+
+    <!-- Seller block -->
+    <div class="card">
+      <h3 class="card-title">Seller Block</h3>
+      <p class="card-sub">Prints at the top of every invoice.</p>
+      <div class="form-grid">
+        <label class="full">
+          <div class="label-text">Company Name</div>
+          <input type="text" id="set_company" value="SABI WABI INNOVATIONS LLP">
+        </label>
+        <label class="full">
+          <div class="label-text">Address</div>
+          <textarea id="set_address" rows="2">Hissa No 1 B, Survey No.72, Rayate, Kalyan-murbad Road, Thane, MAHARASHTRA, 421301</textarea>
+        </label>
+        <label>
+          <div class="label-text">GSTIN</div>
+          <input type="text" id="set_gstin" value="27AFNFS2007K1ZR">
+        </label>
+        <label>
+          <div class="label-text">Seller State</div>
+          <select id="set_state"></select>
+          <div class="help">GST splits as IGST when buyer state differs from this.</div>
+        </label>
+        <label>
+          <div class="label-text">Email</div>
+          <input type="text" id="set_email" placeholder="optional">
+        </label>
+        <label>
+          <div class="label-text">Authorised By</div>
+          <input type="text" id="set_signatory_name" value="Partner">
+        </label>
+        <label class="full">
+          <div class="label-text">Signature Image (optional)</div>
+          <input type="file" id="set_signature_file" accept="image/*" onchange="handleSignatureUpload(event)">
+          <div id="signaturePreview" style="margin-top:8px;"></div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Tax settings -->
+    <div class="card">
+      <h3 class="card-title">Tax Defaults</h3>
+      <p class="card-sub">Applied to all SKUs unless overridden in Products tab. Changes apply to new invoices only.</p>
+      <div class="form-grid cols-3">
+        <label>
+          <div class="label-text">Default HSN Code</div>
+          <input type="text" id="set_default_hsn" value="9403">
+          <div class="help">9403 = metal furniture (default)</div>
+        </label>
+        <label>
+          <div class="label-text">Default GST Rate (%)</div>
+          <input type="number" id="set_default_gst" value="18" step="0.01">
+          <div class="help">Furniture is typically 18%, mattresses 12%</div>
+        </label>
+        <label>
+          <div class="label-text">Treat Total As</div>
+          <select id="set_total_mode">
+            <option value="inclusive" selected>Inclusive of GST + shipping</option>
+            <option value="exclusive">Exclusive of GST</option>
+          </select>
+          <div class="help">Default: inclusive (matches marketplace orders)</div>
+        </label>
+      </div>
+
+      <h4 style="margin: 20px 0 6px 0; font-size: 13px;">Keyword Overrides</h4>
+      <p class="card-sub" style="margin-bottom: 8px;">If product name contains the keyword, use this HSN/GST instead.</p>
+      <div class="table-wrap" style="margin-bottom: 10px;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 30%;">Keyword (case-insensitive)</th>
+              <th>HSN</th>
+              <th>GST %</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="overridesTbody"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-sm" onclick="addOverride()">+ Add Override</button>
+    </div>
+
+    <!-- Invoice prefs -->
+    <div class="card">
+      <h3 class="card-title">Invoice Preferences</h3>
+      <div class="form-grid">
+        <label>
+          <div class="label-text">Payment Terms</div>
+          <input type="text" id="set_payment_terms" value="100% advance before Dispatch">
+        </label>
+        <label>
+          <div class="label-text">Currency Symbol</div>
+          <input type="text" id="set_currency" value="₹" maxlength="3">
+        </label>
+        <label class="full">
+          <div class="label-text">Declaration</div>
+          <textarea id="set_declaration" rows="2">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</textarea>
+        </label>
+      </div>
+    </div>
+
+    <!-- Data management -->
+    <div class="card">
+      <h3 class="card-title">Data Management</h3>
+      <p class="card-sub">All data lives in browser storage. Drive sync coming next round.</p>
+      <div class="row" style="gap: 8px;">
+        <button class="btn btn-sm" onclick="exportAllData()">Export All Data (JSON)</button>
+        <button class="btn btn-sm" onclick="importAllData()">Import Data</button>
+        <button class="btn btn-sm btn-danger" onclick="clearAllData()">Reset Everything</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ADD PRODUCT MODAL ============ -->
+<div class="modal-backdrop hidden" id="addProductModal">
+  <div class="modal">
+    <h3 class="modal-title">Add Product</h3>
+    <div class="form-grid">
+      <label>
+        <div class="label-text">Family</div>
+        <input type="text" id="np_family" placeholder="e.g. Nova">
+      </label>
+      <label>
+        <div class="label-text">Description</div>
+        <input type="text" id="np_desc" placeholder="e.g. Folding Double Bed Black 4x6">
+      </label>
+      <label>
+        <div class="label-text">Master SKU *</div>
+        <input type="text" id="np_master_sku">
+      </label>
+      <label>
+        <div class="label-text">Amazon SKU</div>
+        <input type="text" id="np_amazon_sku">
+      </label>
+      <label>
+        <div class="label-text">Flipkart SKU</div>
+        <input type="text" id="np_flipkart_sku">
+      </label>
+      <label>
+        <div class="label-text">Website SKU</div>
+        <input type="text" id="np_website_sku">
+      </label>
+      <label>
+        <div class="label-text">Amazon ASIN</div>
+        <input type="text" id="np_asin">
+      </label>
+      <label>
+        <div class="label-text">Flipkart FSN</div>
+        <input type="text" id="np_fsn">
+      </label>
+      <label>
+        <div class="label-text">HSN Override <span class="text-faint">(optional)</span></div>
+        <input type="text" id="np_hsn">
+      </label>
+      <label>
+        <div class="label-text">GST % Override <span class="text-faint">(optional)</span></div>
+        <input type="number" id="np_gst" step="0.01">
+      </label>
+    </div>
+    <div class="row" style="margin-top: 16px; justify-content: flex-end; gap: 8px;">
+      <button class="btn" onclick="closeAddProduct()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNewProduct()">Add Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT CUSTOMER MODAL ============ -->
+<div class="modal-backdrop hidden" id="editCustomerModal">
+  <div class="modal">
+    <h3 class="modal-title">Edit Customer</h3>
+    <div class="form-grid">
+      <label class="full">
+        <div class="label-text">Name</div>
+        <input type="text" id="ec_name">
+      </label>
+      <label class="full">
+        <div class="label-text">Address</div>
+        <textarea id="ec_address" rows="2"></textarea>
+      </label>
+      <label>
+        <div class="label-text">State</div>
+        <select id="ec_state"></select>
+      </label>
+      <label>
+        <div class="label-text">Pincode</div>
+        <input type="text" id="ec_pincode">
+      </label>
+      <label>
+        <div class="label-text">Contact</div>
+        <input type="text" id="ec_contact">
+      </label>
+      <label>
+        <div class="label-text">Email</div>
+        <input type="text" id="ec_email">
+      </label>
+      <label class="full">
+        <div class="label-text">GSTIN</div>
+        <input type="text" id="ec_gstin">
+      </label>
+    </div>
+    <div class="row" style="margin-top: 16px; justify-content: flex-end; gap: 8px;">
+      <button class="btn" onclick="closeEditCustomer()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditCustomer()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PRINT VIEW ============ -->
+<div id="printView"></div>
+
+<script src="products_seed.js"></script>
+<script>
+'use strict';
+
+// ============================================================
+// CONFIG & CONSTANTS
+// ============================================================
+const STORAGE_KEY = 'involens_v1';
+const SCHEMA_VERSION = 1;
+
+const INDIAN_STATES = [
+  ['AN', 'Andaman & Nicobar Islands', 35],
+  ['AP', 'Andhra Pradesh', 37],
+  ['AR', 'Arunachal Pradesh', 12],
+  ['AS', 'Assam', 18],
+  ['BR', 'Bihar', 10],
+  ['CH', 'Chandigarh', 4],
+  ['CT', 'Chhattisgarh', 22],
+  ['DN', 'Dadra & Nagar Haveli and Daman & Diu', 26],
+  ['DL', 'Delhi', 7],
+  ['GA', 'Goa', 30],
+  ['GJ', 'Gujarat', 24],
+  ['HR', 'Haryana', 6],
+  ['HP', 'Himachal Pradesh', 2],
+  ['JK', 'Jammu & Kashmir', 1],
+  ['JH', 'Jharkhand', 20],
+  ['KA', 'Karnataka', 29],
+  ['KL', 'Kerala', 32],
+  ['LA', 'Ladakh', 38],
+  ['LD', 'Lakshadweep', 31],
+  ['MP', 'Madhya Pradesh', 23],
+  ['MH', 'Maharashtra', 27],
+  ['MN', 'Manipur', 14],
+  ['ML', 'Meghalaya', 17],
+  ['MZ', 'Mizoram', 15],
+  ['NL', 'Nagaland', 13],
+  ['OD', 'Odisha', 21],
+  ['PY', 'Puducherry', 34],
+  ['PB', 'Punjab', 3],
+  ['RJ', 'Rajasthan', 8],
+  ['SK', 'Sikkim', 11],
+  ['TN', 'Tamil Nadu', 33],
+  ['TG', 'Telangana', 36],
+  ['TR', 'Tripura', 16],
+  ['UP', 'Uttar Pradesh', 9],
+  ['UT', 'Uttarakhand', 5],
+  ['WB', 'West Bengal', 19],
+  ['OT', 'Other Territory', 97],
+];
+
+const DEFAULT_SETTINGS = {
+  company: 'SABI WABI INNOVATIONS LLP',
+  address: 'Hissa No 1 B, Survey No.72, Rayate, Kalyan-murbad Road, Thane, MAHARASHTRA, 421301',
+  gstin: '27AFNFS2007K1ZR',
+  state: 'MH',
+  email: '',
+  signatory_name: 'Partner',
+  signature_b64: '',
+  default_hsn: '9403',
+  default_gst: 18,
+  total_mode: 'inclusive',
+  payment_terms: '100% advance before Dispatch',
+  currency: '₹',
+  declaration: 'We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
+  overrides: [
+    { keyword: 'mattress', hsn: '9404', gst: 12 },
+  ],
+};
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  schema: SCHEMA_VERSION,
+  settings: { ...DEFAULT_SETTINGS },
+  products: [],
+  customers: [],
+  invoices: [],
+};
+
+// ============================================================
+// PERSISTENCE
+// ============================================================
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      // First run — seed products
+      state.products = window.PRODUCTS_SEED ? [...window.PRODUCTS_SEED] : [];
+      saveState();
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    state.schema = parsed.schema || SCHEMA_VERSION;
+    state.settings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
+    if (!state.settings.overrides) state.settings.overrides = [...DEFAULT_SETTINGS.overrides];
+    state.products = parsed.products || [];
+    state.customers = parsed.customers || [];
+    state.invoices = parsed.invoices || [];
+
+    // If products empty (e.g. localStorage was reset but flag not), reseed
+    if (state.products.length === 0 && window.PRODUCTS_SEED) {
+      state.products = [...window.PRODUCTS_SEED];
+      saveState();
+    }
+  } catch (e) {
+    console.error('Failed to load state:', e);
+    toast('Failed to load saved data — starting fresh', 'error');
+    state.products = window.PRODUCTS_SEED ? [...window.PRODUCTS_SEED] : [];
+  }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error('Failed to save state:', e);
+    toast('Failed to save — storage may be full', 'error');
+  }
+}
+
+// ============================================================
+// UI: TABS
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+let toastTimer = null;
+function toast(msg, kind = '') {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.remove(), 3000);
+}
+
+// ============================================================
+// SETTINGS TAB
+// ============================================================
+function populateStateDropdown(selectEl, value) {
+  selectEl.innerHTML = '';
+  for (const [code, name, sc] of INDIAN_STATES) {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = `${name} (${sc.toString().padStart(2, '0')})`;
+    if (code === value) opt.selected = true;
+    selectEl.appendChild(opt);
+  }
+}
+
+function renderSettings() {
+  const s = state.settings;
+  document.getElementById('set_company').value = s.company;
+  document.getElementById('set_address').value = s.address;
+  document.getElementById('set_gstin').value = s.gstin;
+  populateStateDropdown(document.getElementById('set_state'), s.state);
+  document.getElementById('set_email').value = s.email || '';
+  document.getElementById('set_signatory_name').value = s.signatory_name;
+  document.getElementById('set_default_hsn').value = s.default_hsn;
+  document.getElementById('set_default_gst').value = s.default_gst;
+  document.getElementById('set_total_mode').value = s.total_mode;
+  document.getElementById('set_payment_terms').value = s.payment_terms;
+  document.getElementById('set_currency').value = s.currency;
+  document.getElementById('set_declaration').value = s.declaration;
+  renderSignaturePreview();
+  renderOverrides();
+}
+
+function renderSignaturePreview() {
+  const el = document.getElementById('signaturePreview');
+  if (state.settings.signature_b64) {
+    el.innerHTML = `
+      <div class="row" style="gap: 12px; align-items: center;">
+        <img src="${state.settings.signature_b64}" style="max-height: 60px; border: 1px solid var(--border); border-radius: 4px; padding: 4px; background: white;">
+        <button class="btn btn-sm btn-danger" onclick="removeSignature()">Remove</button>
+      </div>`;
+  } else {
+    el.innerHTML = '<div class="help">No signature uploaded</div>';
+  }
+}
+
+function handleSignatureUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 500 * 1024) {
+    toast('Signature image too large (max 500KB)', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    state.settings.signature_b64 = ev.target.result;
+    saveState('settings');
+    renderSignaturePreview();
+    toast('Signature uploaded', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeSignature() {
+  state.settings.signature_b64 = '';
+  saveState('settings');
+  renderSignaturePreview();
+}
+
+function renderOverrides() {
+  const tbody = document.getElementById('overridesTbody');
+  tbody.innerHTML = '';
+  state.settings.overrides.forEach((ov, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" value="${escapeHtml(ov.keyword)}" oninput="updateOverride(${i}, 'keyword', this.value)"></td>
+      <td><input type="text" value="${escapeHtml(ov.hsn)}" oninput="updateOverride(${i}, 'hsn', this.value)"></td>
+      <td><input type="number" step="0.01" value="${ov.gst}" oninput="updateOverride(${i}, 'gst', this.value)"></td>
+      <td><button class="btn btn-sm btn-danger" onclick="removeOverride(${i})">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function addOverride() {
+  state.settings.overrides.push({ keyword: '', hsn: '', gst: 18 });
+  renderOverrides();
+}
+function removeOverride(i) {
+  state.settings.overrides.splice(i, 1);
+  renderOverrides();
+}
+function updateOverride(i, field, value) {
+  if (field === 'gst') value = parseFloat(value) || 0;
+  state.settings.overrides[i][field] = value;
+}
+
+function saveSettings() {
+  state.settings.company = document.getElementById('set_company').value.trim();
+  state.settings.address = document.getElementById('set_address').value.trim();
+  state.settings.gstin = document.getElementById('set_gstin').value.trim().toUpperCase();
+  state.settings.state = document.getElementById('set_state').value;
+  state.settings.email = document.getElementById('set_email').value.trim();
+  state.settings.signatory_name = document.getElementById('set_signatory_name').value.trim();
+  state.settings.default_hsn = document.getElementById('set_default_hsn').value.trim();
+  state.settings.default_gst = parseFloat(document.getElementById('set_default_gst').value) || 0;
+  state.settings.total_mode = document.getElementById('set_total_mode').value;
+  state.settings.payment_terms = document.getElementById('set_payment_terms').value.trim();
+  state.settings.currency = document.getElementById('set_currency').value.trim() || '₹';
+  state.settings.declaration = document.getElementById('set_declaration').value.trim();
+  // Overrides already updated in-place via updateOverride
+  saveState('settings');
+  toast('Settings saved', 'success');
+}
+
+// ============================================================
+// PRODUCTS TAB
+// ============================================================
+function renderProducts() {
+  const tbody = document.getElementById('productsTbody');
+  const search = (document.getElementById('productSearch').value || '').toLowerCase().trim();
+  const familyFilter = document.getElementById('productFilterFamily').value;
+
+  // Populate family filter dropdown (once)
+  const familySelect = document.getElementById('productFilterFamily');
+  if (familySelect.options.length <= 1) {
+    const families = [...new Set(state.products.map(p => p.product_family).filter(Boolean))].sort();
+    familySelect.innerHTML = '<option value="">All families</option>';
+    families.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f;
+      opt.textContent = f;
+      familySelect.appendChild(opt);
+    });
+  }
+
+  // Stats
+  document.getElementById('statTotalSKUs').textContent = state.products.length;
+  document.getElementById('statFamilies').textContent = new Set(state.products.map(p => p.product_family).filter(Boolean)).size;
+  document.getElementById('statCustom').textContent = state.products.filter(p => p.hsn || p.gst_rate != null).length;
+
+  // Filter
+  const filtered = state.products.filter(p => {
+    if (familyFilter && p.product_family !== familyFilter) return false;
+    if (!search) return true;
+    const haystack = [
+      p.master_sku, p.amazon_sku, p.flipkart_sku, p.website_sku,
+      p.amazon_asin, p.flipkart_fsn, p.product_family, p.product_description
+    ].join(' ').toLowerCase();
+    return haystack.includes(search);
+  });
+
+  tbody.innerHTML = '';
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding: 30px; color: var(--text-faint);">No products match your search</td></tr>`;
+    return;
+  }
+
+  filtered.forEach((p) => {
+    const realIdx = state.products.indexOf(p);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="pill">${escapeHtml(p.product_family || '—')}</span></td>
+      <td>${escapeHtml(p.product_description || '')}</td>
+      <td class="mono">${escapeHtml(p.master_sku || '')}</td>
+      <td class="mono">${escapeHtml(p.amazon_sku || '')}</td>
+      <td class="mono">${escapeHtml(p.flipkart_sku || '')}</td>
+      <td class="mono">${escapeHtml(p.website_sku || '')}</td>
+      <td class="mono">${escapeHtml(p.amazon_asin || '')}</td>
+      <td><input type="text" style="width:80px" value="${escapeHtml(p.hsn || '')}" placeholder="default" oninput="updateProductField(${realIdx}, 'hsn', this.value)"></td>
+      <td><input type="number" step="0.01" style="width:70px" value="${p.gst_rate ?? ''}" placeholder="default" oninput="updateProductField(${realIdx}, 'gst_rate', this.value)"></td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteProduct(${realIdx})">Delete</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateProductField(idx, field, value) {
+  if (field === 'gst_rate') {
+    value = value === '' ? null : (parseFloat(value) || 0);
+  }
+  state.products[idx][field] = value;
+  saveState('products');
+  // Update stats only
+  document.getElementById('statCustom').textContent = state.products.filter(p => p.hsn || p.gst_rate != null).length;
+}
+
+function deleteProduct(idx) {
+  if (!confirm(`Delete this product? (${state.products[idx].master_sku || state.products[idx].amazon_sku})`)) return;
+  state.products.splice(idx, 1);
+  saveState('products');
+  // Reset family dropdown so it rebuilds
+  document.getElementById('productFilterFamily').innerHTML = '<option value="">All families</option>';
+  renderProducts();
+  toast('Product deleted', 'success');
+}
+
+function openAddProduct() {
+  ['np_family', 'np_desc', 'np_master_sku', 'np_amazon_sku', 'np_flipkart_sku',
+   'np_website_sku', 'np_asin', 'np_fsn', 'np_hsn', 'np_gst'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('addProductModal').classList.remove('hidden');
+}
+function closeAddProduct() {
+  document.getElementById('addProductModal').classList.add('hidden');
+}
+function saveNewProduct() {
+  const masterSku = document.getElementById('np_master_sku').value.trim();
+  if (!masterSku) {
+    toast('Master SKU is required', 'error');
+    return;
+  }
+  const gstVal = document.getElementById('np_gst').value.trim();
+  const product = {
+    master_sku: masterSku,
+    amazon_sku: document.getElementById('np_amazon_sku').value.trim(),
+    flipkart_sku: document.getElementById('np_flipkart_sku').value.trim(),
+    website_sku: document.getElementById('np_website_sku').value.trim(),
+    amazon_asin: document.getElementById('np_asin').value.trim(),
+    flipkart_fsn: document.getElementById('np_fsn').value.trim(),
+    product_family: document.getElementById('np_family').value.trim(),
+    product_description: document.getElementById('np_desc').value.trim(),
+    hsn: document.getElementById('np_hsn').value.trim(),
+    gst_rate: gstVal === '' ? null : parseFloat(gstVal),
+  };
+  state.products.unshift(product);
+  saveState('products');
+  closeAddProduct();
+  // Reset family dropdown
+  document.getElementById('productFilterFamily').innerHTML = '<option value="">All families</option>';
+  renderProducts();
+  toast('Product added', 'success');
+}
+
+function exportProducts() {
+  const headers = ['Family', 'Description', 'Master SKU', 'Amazon SKU', 'Flipkart SKU', 'Website SKU', 'ASIN', 'FSN', 'HSN Override', 'GST Rate Override'];
+  const rows = state.products.map(p => [
+    p.product_family, p.product_description,
+    p.master_sku, p.amazon_sku, p.flipkart_sku, p.website_sku,
+    p.amazon_asin, p.flipkart_fsn,
+    p.hsn || '', p.gst_rate ?? ''
+  ]);
+  const csv = [headers, ...rows]
+    .map(row => row.map(cell => {
+      const s = String(cell ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(','))
+    .join('\n');
+  downloadFile(csv, `involens_products_${todayStr()}.csv`, 'text/csv');
+}
+
+// ============================================================
+// DATA MANAGEMENT
+// ============================================================
+function exportAllData() {
+  const data = JSON.stringify(state, null, 2);
+  downloadFile(data, `involens_backup_${todayStr()}.json`, 'application/json');
+  toast('Backup downloaded', 'success');
+}
+
+function importAllData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!confirm(`Import ${data.products?.length || 0} products, ${data.customers?.length || 0} customers, ${data.invoices?.length || 0} invoices? This replaces current data.`)) return;
+        state.settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+        state.products = data.products || [];
+        state.customers = data.customers || [];
+        state.invoices = data.invoices || [];
+        saveState();
+        // Push all to Drive if connected
+        if (drive.accessToken) {
+          pushToDrive('settings');
+          pushToDrive('products');
+          pushToDrive('customers');
+          pushToDrive('invoices');
+        }
+        renderSettings();
+        document.getElementById('productFilterFamily').innerHTML = '<option value="">All families</option>';
+        renderProducts();
+        toast('Data imported', 'success');
+      } catch (err) {
+        toast('Invalid JSON file', 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function clearAllData() {
+  if (!confirm('This will reset everything: settings, products, customers, invoices. Are you sure?')) return;
+  if (!confirm('Really sure? This cannot be undone.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// INVOICE FORM STATE
+// ============================================================
+let currentInvoice = null;        // null = new invoice, otherwise { id, ... } existing
+let lineItemsState = [];          // array of { sku, product (resolved), qty, total_inclusive }
+
+function newBlankLine() {
+  return { sku: '', product: null, qty: 1, total_inclusive: 0, discount_pct: 0 };
+}
+
+// ============================================================
+// TAX ENGINE
+// ============================================================
+function resolveProductBySKU(skuInput) {
+  if (!skuInput) return null;
+  const q = skuInput.trim().toLowerCase();
+  // Match across all 4 SKU columns + ASIN + FSN
+  for (const p of state.products) {
+    const fields = [p.master_sku, p.amazon_sku, p.flipkart_sku, p.website_sku, p.amazon_asin, p.flipkart_fsn];
+    if (fields.some(f => (f || '').toLowerCase() === q)) return p;
+  }
+  return null;
+}
+
+function searchProducts(query, limit = 8) {
+  if (!query) return [];
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const matches = [];
+  for (const p of state.products) {
+    const haystack = [
+      p.master_sku, p.amazon_sku, p.flipkart_sku, p.website_sku,
+      p.amazon_asin, p.flipkart_fsn, p.product_family, p.product_description
+    ].join(' ').toLowerCase();
+    if (haystack.includes(q)) matches.push(p);
+    if (matches.length >= limit) break;
+  }
+  return matches;
+}
+
+function getHsnAndGstForProduct(product) {
+  // Priority: 1) per-SKU override, 2) keyword match, 3) settings default
+  if (!product) {
+    return { hsn: state.settings.default_hsn, gst: state.settings.default_gst };
+  }
+  if (product.hsn || product.gst_rate != null) {
+    return {
+      hsn: product.hsn || state.settings.default_hsn,
+      gst: product.gst_rate != null ? product.gst_rate : state.settings.default_gst,
+    };
+  }
+  // Keyword match
+  const desc = ((product.product_family || '') + ' ' + (product.product_description || '')).toLowerCase();
+  for (const ov of state.settings.overrides) {
+    if (ov.keyword && desc.includes(ov.keyword.toLowerCase())) {
+      return { hsn: ov.hsn || state.settings.default_hsn, gst: ov.gst };
+    }
+  }
+  return { hsn: state.settings.default_hsn, gst: state.settings.default_gst };
+}
+
+function computeLineTax(line) {
+  // Returns { taxable, gst_amount, gst_rate, hsn, total_inclusive, unit_taxable, unit_inclusive }
+  const product = line.product || resolveProductBySKU(line.sku);
+  const { hsn, gst } = getHsnAndGstForProduct(product);
+  const totalInc = parseFloat(line.total_inclusive) || 0;
+  const qty = parseInt(line.qty) || 0;
+  let taxable, gstAmt;
+  if (state.settings.total_mode === 'inclusive') {
+    taxable = totalInc / (1 + gst / 100);
+    gstAmt = totalInc - taxable;
+  } else {
+    taxable = totalInc;
+    gstAmt = totalInc * (gst / 100);
+  }
+  return {
+    product, hsn, gst_rate: gst,
+    total_inclusive: state.settings.total_mode === 'inclusive' ? totalInc : taxable + gstAmt,
+    taxable: round2(taxable),
+    gst_amount: round2(gstAmt),
+    unit_taxable: qty > 0 ? round2(taxable / qty) : 0,
+    unit_inclusive: qty > 0 ? round2(totalInc / qty) : 0,
+  };
+}
+
+function computeInvoiceTotals(lines, buyerStateCode) {
+  const sellerState = state.settings.state;
+  const isInterState = buyerStateCode && buyerStateCode !== sellerState;
+  let totalTaxable = 0, totalGst = 0, totalInclusive = 0;
+  const detailedLines = lines.map(line => {
+    const c = computeLineTax(line);
+    totalTaxable += c.taxable;
+    totalGst += c.gst_amount;
+    totalInclusive += c.total_inclusive;
+    return c;
+  });
+  totalTaxable = round2(totalTaxable);
+  totalGst = round2(totalGst);
+  totalInclusive = round2(totalInclusive);
+  // GST split
+  let igst = 0, cgst = 0, sgst = 0;
+  if (isInterState) {
+    igst = totalGst;
+  } else {
+    cgst = round2(totalGst / 2);
+    sgst = round2(totalGst - cgst);  // ensure they sum exactly
+  }
+  return { totalTaxable, totalGst, totalInclusive, igst, cgst, sgst, isInterState, lines: detailedLines };
+}
+
+function round2(n) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function fmtCurrency(n) {
+  if (n == null || isNaN(n)) return '—';
+  return state.settings.currency + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ============================================================
+// NUMBER TO WORDS (Indian English)
+// ============================================================
+function numberToWordsIndian(num) {
+  num = Math.round(num);
+  if (num === 0) return 'Zero';
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+                'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+                'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  function under1000(n) {
+    let s = '';
+    if (n >= 100) { s += ones[Math.floor(n / 100)] + ' Hundred '; n %= 100; }
+    if (n >= 20) { s += tens[Math.floor(n / 10)] + ' '; n %= 10; if (n > 0) s += ones[n] + ' '; }
+    else if (n > 0) { s += ones[n] + ' '; }
+    return s.trim();
+  }
+  let result = '';
+  const crore = Math.floor(num / 10000000); num %= 10000000;
+  const lakh = Math.floor(num / 100000); num %= 100000;
+  const thousand = Math.floor(num / 1000); num %= 1000;
+  const rest = num;
+  if (crore) result += under1000(crore) + ' Crore ';
+  if (lakh) result += under1000(lakh) + ' Lakh ';
+  if (thousand) result += under1000(thousand) + ' Thousand ';
+  if (rest) result += under1000(rest);
+  return result.trim();
+}
+
+// ============================================================
+// INVOICE FORM RENDERING
+// ============================================================
+function initInvoiceForm() {
+  // Date defaults to today
+  document.getElementById('inv_date').value = todayStr();
+  // State dropdown for buyer
+  populateStateDropdown(document.getElementById('inv_cust_state'), '');
+  // Start with 1 empty line
+  if (lineItemsState.length === 0) lineItemsState.push(newBlankLine());
+  renderLineItems();
+  recalcSummary();
+}
+
+function renderLineItems() {
+  const container = document.getElementById('lineItems');
+  container.innerHTML = '';
+  lineItemsState.forEach((line, idx) => {
+    const div = document.createElement('div');
+    div.className = 'line-item';
+    const productName = line.product
+      ? (line.product.product_family + ' — ' + line.product.product_description)
+      : '<span class="text-faint">(type SKU above to match a product)</span>';
+    const productMeta = line.product
+      ? `HSN: ${getHsnAndGstForProduct(line.product).hsn} · GST ${getHsnAndGstForProduct(line.product).gst}%`
+      : '';
+    div.innerHTML = `
+      <div class="li-num">${idx + 1}</div>
+      <div>
+        <div class="autocomplete-wrap">
+          <input type="text" placeholder="Paste any SKU type (Master/Amazon/Flipkart/Website/ASIN/FSN)"
+                 value="${escapeHtml(line.sku)}"
+                 oninput="onSKUInput(${idx}, this.value)"
+                 onblur="setTimeout(() => closeSKUAutocomplete(${idx}), 200)"
+                 autocomplete="off">
+          <div class="autocomplete-list hidden" id="skuAC_${idx}"></div>
+        </div>
+        <div class="li-product">
+          <div class="li-product-name">${productName}</div>
+          <div class="li-product-meta">${productMeta}</div>
+        </div>
+      </div>
+      <div>
+        <div class="label-text">Qty</div>
+        <input type="number" min="1" step="1" value="${line.qty}" oninput="onLineFieldChange(${idx}, 'qty', this.value)">
+      </div>
+      <div>
+        <div class="label-text">Total (incl.)</div>
+        <input type="number" min="0" step="0.01" value="${line.total_inclusive}" oninput="onLineFieldChange(${idx}, 'total_inclusive', this.value)">
+      </div>
+      <button class="li-remove" onclick="removeLineItem(${idx})" title="Remove line">×</button>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function addLineItem() {
+  lineItemsState.push(newBlankLine());
+  renderLineItems();
+  recalcSummary();
+}
+function removeLineItem(idx) {
+  if (lineItemsState.length === 1) {
+    // Don't remove last; just clear
+    lineItemsState[0] = newBlankLine();
+  } else {
+    lineItemsState.splice(idx, 1);
+  }
+  renderLineItems();
+  recalcSummary();
+}
+function onLineFieldChange(idx, field, value) {
+  if (field === 'qty') value = parseInt(value) || 0;
+  else if (field === 'total_inclusive') value = parseFloat(value) || 0;
+  lineItemsState[idx][field] = value;
+  recalcSummary();
+}
+
+// SKU autocomplete in line items
+function onSKUInput(idx, value) {
+  lineItemsState[idx].sku = value;
+  // Try exact resolve
+  const exact = resolveProductBySKU(value);
+  if (exact) {
+    lineItemsState[idx].product = exact;
+  }
+  // Show autocomplete suggestions
+  const matches = searchProducts(value, 8);
+  const acEl = document.getElementById(`skuAC_${idx}`);
+  if (matches.length === 0 || !value || value.length < 2) {
+    acEl.classList.add('hidden');
+    acEl.innerHTML = '';
+  } else {
+    acEl.innerHTML = matches.map(p => {
+      const sk = p.master_sku || p.amazon_sku || '';
+      const display = `${p.product_family || ''} — ${p.product_description || ''}`.trim();
+      return `<div class="autocomplete-item" onmousedown="pickSKU(${idx}, '${escapeAttr(sk)}')">
+        <div class="ac-primary">${escapeHtml(display)}</div>
+        <div class="ac-secondary mono">${escapeHtml(sk)} · ${escapeHtml(p.amazon_asin || '')}</div>
+      </div>`;
+    }).join('');
+    acEl.classList.remove('hidden');
+  }
+  // Re-render to update product info, but keep the input focused
+  rerenderLineProduct(idx);
+  recalcSummary();
+}
+
+function rerenderLineProduct(idx) {
+  // Just update the product display below the SKU input, not the whole row
+  const rows = document.querySelectorAll('#lineItems .line-item');
+  const row = rows[idx];
+  if (!row) return;
+  const productEl = row.querySelector('.li-product');
+  const line = lineItemsState[idx];
+  if (line.product) {
+    const ti = getHsnAndGstForProduct(line.product);
+    productEl.innerHTML = `
+      <div class="li-product-name">${escapeHtml(line.product.product_family + ' — ' + line.product.product_description)}</div>
+      <div class="li-product-meta">HSN: ${escapeHtml(ti.hsn)} · GST ${ti.gst}%</div>
+    `;
+  } else {
+    productEl.innerHTML = `
+      <div class="li-product-name"><span class="text-faint">(type SKU above to match a product)</span></div>
+      <div class="li-product-meta"></div>
+    `;
+  }
+}
+
+function pickSKU(idx, sku) {
+  lineItemsState[idx].sku = sku;
+  lineItemsState[idx].product = resolveProductBySKU(sku);
+  closeSKUAutocomplete(idx);
+  renderLineItems();
+  recalcSummary();
+}
+
+function closeSKUAutocomplete(idx) {
+  const acEl = document.getElementById(`skuAC_${idx}`);
+  if (acEl) acEl.classList.add('hidden');
+}
+
+// ============================================================
+// CUSTOMER AUTOCOMPLETE
+// ============================================================
+function customerAutocomplete() {
+  const input = document.getElementById('inv_cust_name');
+  const ac = document.getElementById('custAutocomplete');
+  const q = (input.value || '').toLowerCase().trim();
+  if (q.length < 3) {
+    ac.classList.add('hidden');
+    ac.innerHTML = '';
+    return;
+  }
+  const matches = state.customers.filter(c =>
+    (c.name || '').toLowerCase().includes(q) ||
+    (c.contact || '').includes(q) ||
+    (c.pincode || '').includes(q)
+  ).slice(0, 6);
+  if (matches.length === 0) {
+    ac.classList.add('hidden');
+    return;
+  }
+  ac.innerHTML = matches.map(c => `
+    <div class="autocomplete-item" onmousedown="pickCustomer('${escapeAttr(c.id)}')">
+      <div class="ac-primary">${escapeHtml(c.name)}</div>
+      <div class="ac-secondary">${escapeHtml((c.address || '').slice(0, 80))} · ${escapeHtml(stateName(c.state))}${c.contact ? ' · ' + escapeHtml(c.contact) : ''}</div>
+    </div>
+  `).join('');
+  ac.classList.remove('hidden');
+  // Hide on outside click
+  setTimeout(() => {
+    document.addEventListener('click', hideCustomerAC, { once: true });
+  }, 100);
+}
+
+function hideCustomerAC() {
+  document.getElementById('custAutocomplete').classList.add('hidden');
+}
+
+function pickCustomer(id) {
+  const c = state.customers.find(c => c.id === id);
+  if (!c) return;
+  document.getElementById('inv_cust_name').value = c.name || '';
+  document.getElementById('inv_cust_address').value = c.address || '';
+  document.getElementById('inv_cust_state').value = c.state || '';
+  document.getElementById('inv_cust_pincode').value = c.pincode || '';
+  document.getElementById('inv_cust_contact').value = c.contact || '';
+  document.getElementById('inv_cust_email').value = c.email || '';
+  document.getElementById('inv_cust_gstin').value = c.gstin || '';
+  hideCustomerAC();
+  recalcSummary();
+}
+
+// ============================================================
+// SUMMARY CALCULATION
+// ============================================================
+function recalcSummary() {
+  const buyerState = document.getElementById('inv_cust_state')?.value || '';
+  const totals = computeInvoiceTotals(lineItemsState, buyerState);
+
+  document.getElementById('sum_lines').textContent = lineItemsState.length;
+  document.getElementById('sum_qty').textContent = lineItemsState.reduce((s, l) => s + (parseInt(l.qty) || 0), 0);
+  document.getElementById('sum_inclusive').textContent = fmtCurrency(totals.totalInclusive);
+  document.getElementById('sum_taxable').textContent = fmtCurrency(totals.totalTaxable);
+
+  const pill = document.getElementById('gstModePill');
+  if (!buyerState) {
+    pill.textContent = 'Select state';
+    pill.className = 'gst-mode-pill';
+  } else if (totals.isInterState) {
+    pill.textContent = 'Inter-State (IGST)';
+    pill.className = 'gst-mode-pill';
+  } else {
+    pill.textContent = 'Intra-State (CGST+SGST)';
+    pill.className = 'gst-mode-pill intra';
+  }
+
+  if (totals.isInterState) {
+    document.getElementById('row_igst').classList.remove('hidden');
+    document.getElementById('row_cgst').classList.add('hidden');
+    document.getElementById('row_sgst').classList.add('hidden');
+    document.getElementById('sum_igst').textContent = fmtCurrency(totals.igst);
+  } else {
+    document.getElementById('row_igst').classList.add('hidden');
+    document.getElementById('row_cgst').classList.remove('hidden');
+    document.getElementById('row_sgst').classList.remove('hidden');
+    document.getElementById('sum_cgst').textContent = fmtCurrency(totals.cgst);
+    document.getElementById('sum_sgst').textContent = fmtCurrency(totals.sgst);
+  }
+
+  document.getElementById('sum_grand').textContent = fmtCurrency(totals.totalInclusive);
+  document.getElementById('sum_words').textContent = totals.totalInclusive > 0
+    ? numberToWordsIndian(totals.totalInclusive) + ' Only'
+    : '—';
+
+  document.getElementById('summaryHint').textContent = buyerState
+    ? `Buyer state: ${stateName(buyerState)} · Seller state: ${stateName(state.settings.state)}`
+    : 'Select buyer state to see GST split.';
+}
+
+function updateReplacementBanner() {
+  const isRepl = document.getElementById('inv_is_replacement').checked;
+  document.getElementById('replacementBanner').classList.toggle('hidden', !isRepl);
+}
+
+// ============================================================
+// SAVE INVOICE
+// ============================================================
+function validateInvoice() {
+  const errors = [];
+  if (!document.getElementById('inv_order_id').value.trim()) errors.push('Invoice No / Order ID required');
+  if (!document.getElementById('inv_date').value) errors.push('Invoice date required');
+  if (!document.getElementById('inv_cust_name').value.trim()) errors.push('Customer name required');
+  if (!document.getElementById('inv_cust_address').value.trim()) errors.push('Customer address required');
+  if (!document.getElementById('inv_cust_state').value) errors.push('Buyer state required');
+  if (lineItemsState.length === 0) errors.push('At least one line item required');
+  lineItemsState.forEach((line, i) => {
+    if (!line.sku.trim()) errors.push(`Line ${i + 1}: SKU required`);
+    else if (!resolveProductBySKU(line.sku)) errors.push(`Line ${i + 1}: SKU "${line.sku}" not found in master`);
+    if (!line.qty || line.qty < 1) errors.push(`Line ${i + 1}: Qty must be at least 1`);
+    if (!line.total_inclusive || line.total_inclusive <= 0) errors.push(`Line ${i + 1}: Total amount required`);
+  });
+  return errors;
+}
+
+function saveAndPrintInvoice() {
+  const errors = validateInvoice();
+  if (errors.length > 0) {
+    toast(errors[0], 'error');
+    return;
+  }
+  // Build invoice record
+  const buyerState = document.getElementById('inv_cust_state').value;
+  const totals = computeInvoiceTotals(lineItemsState, buyerState);
+  const orderId = document.getElementById('inv_order_id').value.trim();
+  const isReplacement = document.getElementById('inv_is_replacement').checked;
+
+  // Snapshot all settings + product/customer info into the invoice (immutable)
+  const invoiceLines = lineItemsState.map((line, i) => {
+    const c = computeLineTax(line);
+    return {
+      sr: i + 1,
+      sku: line.sku,
+      product_name: line.product
+        ? (line.product.product_family + ' — ' + line.product.product_description)
+        : '',
+      master_sku: line.product?.master_sku || '',
+      hsn: c.hsn,
+      gst_rate: c.gst_rate,
+      qty: parseInt(line.qty) || 0,
+      unit_inclusive: c.unit_inclusive,
+      unit_taxable: c.unit_taxable,
+      total_inclusive: c.total_inclusive,
+      taxable: c.taxable,
+      gst_amount: c.gst_amount,
+      discount_pct: parseFloat(line.discount_pct) || 0,
+    };
+  });
+
+  const consignee = {
+    name: document.getElementById('inv_cust_name').value.trim(),
+    address: document.getElementById('inv_cust_address').value.trim(),
+    state: buyerState,
+    pincode: document.getElementById('inv_cust_pincode').value.trim(),
+    contact: document.getElementById('inv_cust_contact').value.trim(),
+    email: document.getElementById('inv_cust_email').value.trim(),
+    gstin: document.getElementById('inv_cust_gstin').value.trim().toUpperCase(),
+  };
+
+  const invoice = {
+    id: currentInvoice ? currentInvoice.id : ('inv_' + Date.now()),
+    order_id: orderId,
+    date: document.getElementById('inv_date').value,
+    awb: document.getElementById('inv_awb').value.trim(),
+    is_replacement: isReplacement,
+    consignee,
+    seller_snapshot: { ...state.settings },
+    lines: invoiceLines,
+    totals: {
+      taxable: totals.totalTaxable,
+      gst: totals.totalGst,
+      igst: totals.igst,
+      cgst: totals.cgst,
+      sgst: totals.sgst,
+      grand_total: totals.totalInclusive,
+      is_inter_state: totals.isInterState,
+    },
+    created_at: currentInvoice?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // Save / update
+  if (currentInvoice) {
+    const idx = state.invoices.findIndex(x => x.id === invoice.id);
+    if (idx >= 0) state.invoices[idx] = invoice;
+  } else {
+    state.invoices.unshift(invoice);
+  }
+
+  // Upsert customer
+  upsertCustomer(consignee);
+
+  saveState();
+  // Push both kinds (debounced inside)
+  if (drive.accessToken) {
+    saveState('invoices');
+    saveState('customers');
+  }
+  toast('Invoice saved', 'success');
+
+  // Print
+  setTimeout(() => printInvoice(invoice), 200);
+}
+
+function upsertCustomer(consignee) {
+  if (!consignee.name) return;
+  // Match by name + (contact OR pincode)
+  const existing = state.customers.find(c =>
+    c.name.toLowerCase() === consignee.name.toLowerCase() &&
+    (
+      (c.contact && c.contact === consignee.contact) ||
+      (c.pincode && c.pincode === consignee.pincode)
+    )
+  );
+  if (existing) {
+    // Update fields if newer info present
+    Object.assign(existing, consignee);
+    existing.order_count = (existing.order_count || 1) + 1;
+    existing.updated_at = new Date().toISOString();
+  } else {
+    state.customers.unshift({
+      id: 'cust_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      ...consignee,
+      order_count: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }
+}
+
+function resetInvoiceForm() {
+  if (!confirm('Clear the form? Unsaved changes will be lost.')) return;
+  currentInvoice = null;
+  lineItemsState = [newBlankLine()];
+  document.getElementById('inv_order_id').value = '';
+  document.getElementById('inv_date').value = todayStr();
+  document.getElementById('inv_awb').value = '';
+  document.getElementById('inv_is_replacement').checked = false;
+  document.getElementById('inv_cust_name').value = '';
+  document.getElementById('inv_cust_address').value = '';
+  document.getElementById('inv_cust_state').value = '';
+  document.getElementById('inv_cust_pincode').value = '';
+  document.getElementById('inv_cust_contact').value = '';
+  document.getElementById('inv_cust_email').value = '';
+  document.getElementById('inv_cust_gstin').value = '';
+  document.getElementById('invoiceFormTitle').textContent = 'New Invoice';
+  updateReplacementBanner();
+  renderLineItems();
+  recalcSummary();
+}
+
+function loadInvoiceForEdit(id) {
+  const inv = state.invoices.find(x => x.id === id);
+  if (!inv) return;
+  currentInvoice = inv;
+  document.getElementById('invoiceFormTitle').textContent = `Edit Invoice — ${inv.order_id}`;
+  document.getElementById('inv_order_id').value = inv.order_id;
+  document.getElementById('inv_date').value = inv.date;
+  document.getElementById('inv_awb').value = inv.awb || '';
+  document.getElementById('inv_is_replacement').checked = !!inv.is_replacement;
+  document.getElementById('inv_cust_name').value = inv.consignee.name || '';
+  document.getElementById('inv_cust_address').value = inv.consignee.address || '';
+  document.getElementById('inv_cust_state').value = inv.consignee.state || '';
+  document.getElementById('inv_cust_pincode').value = inv.consignee.pincode || '';
+  document.getElementById('inv_cust_contact').value = inv.consignee.contact || '';
+  document.getElementById('inv_cust_email').value = inv.consignee.email || '';
+  document.getElementById('inv_cust_gstin').value = inv.consignee.gstin || '';
+  lineItemsState = inv.lines.map(L => ({
+    sku: L.sku,
+    product: resolveProductBySKU(L.sku),
+    qty: L.qty,
+    total_inclusive: L.total_inclusive,
+    discount_pct: L.discount_pct || 0,
+  }));
+  if (lineItemsState.length === 0) lineItemsState = [newBlankLine()];
+  updateReplacementBanner();
+  renderLineItems();
+  recalcSummary();
+  switchTab('invoice');
+}
+
+// ============================================================
+// PRINT VIEW
+// ============================================================
+function printInvoice(invoice) {
+  const pv = document.getElementById('printView');
+  pv.innerHTML = renderPrintHTML(invoice);
+  document.body.classList.add('printing');
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      document.body.classList.remove('printing');
+    }, 200);
+  }, 100);
+}
+
+function renderPrintHTML(inv) {
+  const s = inv.seller_snapshot || state.settings;
+  const t = inv.totals;
+  const itemRows = inv.lines.map(L => {
+    const lineTotal = round2(L.unit_inclusive * L.qty);
+    return `
+      <tr>
+        <td class="ctr">${L.sr}</td>
+        <td>${escapeHtml(L.product_name)}<br><span style="font-size:10px;color:#555;">SKU: ${escapeHtml(L.sku)}</span></td>
+        <td class="ctr">${escapeHtml(L.hsn)}</td>
+        <td class="num">${L.unit_inclusive.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+        <td class="ctr">${L.qty}</td>
+        <td class="num">${L.unit_taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+        <td class="ctr">${L.discount_pct || 0}%</td>
+        <td class="num">${(L.unit_taxable * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const taxRows = t.is_inter_state
+    ? `<tr><td class="label">IGST</td><td class="value">${t.igst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td></tr>
+       <tr><td class="label">CGST</td><td class="value">—</td></tr>
+       <tr><td class="label">SGST</td><td class="value">—</td></tr>`
+    : `<tr><td class="label">IGST</td><td class="value">—</td></tr>
+       <tr><td class="label">CGST</td><td class="value">${t.cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td></tr>
+       <tr><td class="label">SGST</td><td class="value">${t.sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td></tr>`;
+
+  const buyerStateName = stateName(inv.consignee.state);
+  const sellerStateName = stateName(s.state);
+
+  return `
+    <div class="print-page">
+      <div class="print-title">Tax Invoice</div>
+
+      <table class="seller-table" style="margin-top: 0;">
+        <tr>
+          <td colspan="4" style="font-weight: bold; font-size: 13px;">${escapeHtml(s.company)}</td>
+        </tr>
+        <tr>
+          <td class="label">Address:</td>
+          <td colspan="3">${escapeHtml(s.address)}</td>
+        </tr>
+        <tr>
+          <td class="label">GSTIN:</td>
+          <td>${escapeHtml(s.gstin)}</td>
+          <td class="label" style="width: 90px;">State:</td>
+          <td>${escapeHtml(sellerStateName)}</td>
+        </tr>
+        <tr>
+          <td class="label">Email:</td>
+          <td colspan="3">${escapeHtml(s.email || '-')}</td>
+        </tr>
+      </table>
+
+      <table class="seller-table" style="margin-top: 6px;">
+        <tr>
+          <td class="label">Invoice No:</td>
+          <td>${escapeHtml(inv.order_id)}</td>
+          <td class="label" style="width: 90px;">Invoice Date:</td>
+          <td>${formatDateForPrint(inv.date)}</td>
+        </tr>
+      </table>
+
+      <table class="seller-table" style="margin-top: 6px;">
+        <tr>
+          <td class="label">Consignee:</td>
+          <td>${escapeHtml(inv.consignee.name)}</td>
+          <td class="label" style="width: 90px;">Kind Attn:</td>
+          <td>${escapeHtml(inv.consignee.name)}</td>
+        </tr>
+        <tr>
+          <td class="label">Address:</td>
+          <td colspan="3">${escapeHtml(inv.consignee.address)}, ${escapeHtml(buyerStateName)}${inv.consignee.pincode ? ' ' + escapeHtml(inv.consignee.pincode) : ''}</td>
+        </tr>
+        <tr>
+          <td class="label">Contact:</td>
+          <td>${escapeHtml(inv.consignee.contact || '-')}</td>
+          <td class="label" style="width: 90px;">Email:</td>
+          <td>${escapeHtml(inv.consignee.email || '-')}</td>
+        </tr>
+        ${inv.consignee.gstin ? `<tr>
+          <td class="label">Buyer GSTIN:</td>
+          <td colspan="3">${escapeHtml(inv.consignee.gstin)}</td>
+        </tr>` : ''}
+      </table>
+
+      <table class="items-table" style="margin-top: 8px;">
+        <thead>
+          <tr>
+            <th style="width: 6%;">Sr.no</th>
+            <th>Product</th>
+            <th style="width: 8%;">HSN</th>
+            <th style="width: 10%;">Unit Price</th>
+            <th style="width: 6%;">Qty</th>
+            <th style="width: 11%;">Net Amount</th>
+            <th style="width: 9%;">Discount %</th>
+            <th style="width: 12%;">Total Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemRows}
+        </tbody>
+      </table>
+
+      <table class="summary-table" style="margin-top: 6px; width: 50%; margin-left: auto;">
+        <tr>
+          <td class="label">Taxable Value</td>
+          <td class="value">${t.taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+        </tr>
+        ${taxRows}
+        <tr>
+          <td class="label">Shipping</td>
+          <td class="value">Included</td>
+        </tr>
+        <tr class="total-row">
+          <td class="label">Total (Inclusive of all taxes)</td>
+          <td class="value">${t.grand_total.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+        </tr>
+      </table>
+
+      <div style="margin-top: 6px; padding: 6px 8px; border: 1px solid #000; font-size: 11px;">
+        <strong>Amount in words:</strong> ${escapeHtml(numberToWordsIndian(t.grand_total))} Only
+      </div>
+
+      ${inv.is_replacement
+        ? `<div class="replacement-stamp">REPLACEMENT INVOICE — NO CHARGE</div>`
+        : `<div style="margin-top: 6px; padding: 6px 8px; border: 1px solid #000; font-size: 11px;">
+            <strong>Payment Terms:</strong> ${escapeHtml(s.payment_terms)}
+          </div>`}
+
+      <div class="footer-grid">
+        <div class="footer-cell">
+          <strong>Tracking ID:</strong> ${escapeHtml(inv.awb || '-')}
+        </div>
+        <div class="footer-cell" style="text-align: right;">
+          <div style="font-weight: bold;">For ${escapeHtml(s.company)}</div>
+          ${s.signature_b64 ? `<img class="signatory-img" src="${s.signature_b64}" style="margin-left: auto;">` : '<div style="height: 40px;"></div>'}
+          <div>${escapeHtml(s.signatory_name || 'Authorised Signatory')}</div>
+        </div>
+      </div>
+
+      <div class="declaration">
+        <strong>Declaration:</strong> ${escapeHtml(s.declaration)}
+      </div>
+    </div>
+  `;
+}
+
+function formatDateForPrint(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ============================================================
+// HISTORY TAB
+// ============================================================
+function renderHistory() {
+  const search = (document.getElementById('historySearch').value || '').toLowerCase().trim();
+  const monthFilter = document.getElementById('historyFilterMonth').value;
+  const tbody = document.getElementById('historyTbody');
+
+  // Populate month filter
+  const monthSelect = document.getElementById('historyFilterMonth');
+  if (monthSelect.options.length <= 1) {
+    const months = [...new Set(state.invoices.map(i => i.date?.slice(0, 7)).filter(Boolean))].sort().reverse();
+    monthSelect.innerHTML = '<option value="">All months</option>';
+    months.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      monthSelect.appendChild(opt);
+    });
+  }
+
+  // Stats
+  const thisMonth = todayStr().slice(0, 7);
+  document.getElementById('stat_inv_total').textContent = state.invoices.length;
+  document.getElementById('stat_inv_month').textContent = state.invoices.filter(i => (i.date || '').slice(0, 7) === thisMonth).length;
+  const totalValue = state.invoices.filter(i => !i.is_replacement).reduce((s, i) => s + (i.totals?.grand_total || 0), 0);
+  document.getElementById('stat_inv_value').textContent = fmtCurrency(totalValue);
+  document.getElementById('stat_inv_repl').textContent = state.invoices.filter(i => i.is_replacement).length;
+
+  // Filter
+  const filtered = state.invoices.filter(inv => {
+    if (monthFilter && (inv.date || '').slice(0, 7) !== monthFilter) return false;
+    if (!search) return true;
+    const haystack = [
+      inv.order_id, inv.consignee?.name, inv.consignee?.contact, inv.awb,
+      ...(inv.lines || []).map(L => L.sku + ' ' + L.product_name)
+    ].join(' ').toLowerCase();
+    return haystack.includes(search);
+  });
+
+  tbody.innerHTML = '';
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 30px; color: var(--text-faint);">${state.invoices.length === 0 ? 'No invoices yet — create your first one in the New Invoice tab' : 'No invoices match your search'}</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(inv => {
+    const tr = document.createElement('tr');
+    const itemsCount = inv.lines?.length || 0;
+    tr.innerHTML = `
+      <td>${formatDateShort(inv.date)}</td>
+      <td class="mono" style="font-size: 11px;">${escapeHtml(inv.order_id)}${inv.is_replacement ? ' <span class="pill warn">RPL</span>' : ''}</td>
+      <td>${escapeHtml(inv.consignee?.name || '')}</td>
+      <td>${escapeHtml(stateName(inv.consignee?.state) || '')}</td>
+      <td>${itemsCount}</td>
+      <td class="mono">${fmtCurrency(inv.totals?.grand_total || 0)}</td>
+      <td class="mono">${fmtCurrency((inv.totals?.gst) || 0)}</td>
+      <td class="mono" style="font-size: 11px;">${escapeHtml(inv.awb || '—')}</td>
+      <td>
+        <button class="btn btn-sm" onclick="printInvoiceById('${escapeAttr(inv.id)}')">Print</button>
+        <button class="btn btn-sm" onclick="loadInvoiceForEdit('${escapeAttr(inv.id)}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${escapeAttr(inv.id)}')">Del</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function printInvoiceById(id) {
+  const inv = state.invoices.find(x => x.id === id);
+  if (inv) printInvoice(inv);
+}
+function deleteInvoice(id) {
+  const inv = state.invoices.find(x => x.id === id);
+  if (!inv) return;
+  if (!confirm(`Delete invoice ${inv.order_id}? This cannot be undone.`)) return;
+  state.invoices = state.invoices.filter(x => x.id !== id);
+  saveState();
+  // Push to Drive — for deletes, overwrite (skip merge)
+  if (drive.accessToken && drive.fileIds.invoices) {
+    uploadDriveFile(drive.fileIds.invoices, JSON.stringify(state.invoices))
+      .then(() => { drive.lastSync = new Date(); updateSyncUI('connected'); })
+      .catch(e => toast('Drive sync failed: ' + e.message, 'error'));
+  }
+  // Reset month filter so it rebuilds
+  document.getElementById('historyFilterMonth').innerHTML = '<option value="">All months</option>';
+  renderHistory();
+  toast('Invoice deleted', 'success');
+}
+
+function exportInvoices() {
+  const headers = [
+    'Invoice No', 'Order Date', 'Consignee', 'Address', 'State', 'Pincode', 'Contact', 'Email', 'Buyer GSTIN',
+    'SKU', 'Product Name', 'HSN', 'GST Rate', 'Qty', 'Unit Price (Incl)', 'Discount %',
+    'Taxable', 'IGST', 'CGST', 'SGST', 'Grand Total', 'AWB', 'Replacement'
+  ];
+  const rows = [];
+  state.invoices.forEach(inv => {
+    inv.lines.forEach(L => {
+      rows.push([
+        inv.order_id, inv.date,
+        inv.consignee?.name, inv.consignee?.address, stateName(inv.consignee?.state), inv.consignee?.pincode,
+        inv.consignee?.contact, inv.consignee?.email, inv.consignee?.gstin,
+        L.sku, L.product_name, L.hsn, L.gst_rate, L.qty, L.unit_inclusive, L.discount_pct || 0,
+        L.taxable, inv.totals?.is_inter_state ? L.gst_amount : 0,
+        inv.totals?.is_inter_state ? 0 : round2(L.gst_amount / 2),
+        inv.totals?.is_inter_state ? 0 : round2(L.gst_amount / 2),
+        L.total_inclusive, inv.awb, inv.is_replacement ? 'Yes' : 'No'
+      ]);
+    });
+  });
+  const csv = [headers, ...rows]
+    .map(row => row.map(cell => {
+      const s = String(cell ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(','))
+    .join('\n');
+  downloadFile(csv, `involens_invoices_${todayStr()}.csv`, 'text/csv');
+  toast('Invoices exported', 'success');
+}
+
+// ============================================================
+// CUSTOMERS TAB
+// ============================================================
+function renderCustomers() {
+  const search = (document.getElementById('customerSearch').value || '').toLowerCase().trim();
+  const tbody = document.getElementById('customersTbody');
+
+  // Stats
+  document.getElementById('stat_cust_total').textContent = state.customers.length;
+  document.getElementById('stat_cust_repeat').textContent = state.customers.filter(c => (c.order_count || 0) > 1).length;
+  document.getElementById('stat_cust_states').textContent = new Set(state.customers.map(c => c.state).filter(Boolean)).size;
+
+  // Filter
+  const filtered = state.customers.filter(c => {
+    if (!search) return true;
+    const haystack = [c.name, c.address, c.contact, c.email, c.pincode, c.gstin].join(' ').toLowerCase();
+    return haystack.includes(search);
+  });
+
+  tbody.innerHTML = '';
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 30px; color: var(--text-faint);">${state.customers.length === 0 ? 'No customers yet — they appear here as you generate invoices' : 'No customers match your search'}</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(c.name)}</td>
+      <td style="max-width: 280px; font-size: 11px;">${escapeHtml((c.address || '').slice(0, 100))}${(c.address || '').length > 100 ? '…' : ''}</td>
+      <td>${escapeHtml(stateName(c.state) || '')}</td>
+      <td class="mono">${escapeHtml(c.pincode || '')}</td>
+      <td class="mono">${escapeHtml(c.contact || '')}</td>
+      <td class="mono" style="font-size: 11px;">${escapeHtml(c.email || '')}</td>
+      <td class="mono" style="font-size: 11px;">${escapeHtml(c.gstin || '')}</td>
+      <td>${c.order_count || 1}</td>
+      <td>
+        <button class="btn btn-sm" onclick="openEditCustomer('${escapeAttr(c.id)}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteCustomer('${escapeAttr(c.id)}')">Del</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function openEditCustomer(id) {
+  const c = state.customers.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('editCustomerModal').dataset.id = id;
+  document.getElementById('ec_name').value = c.name || '';
+  document.getElementById('ec_address').value = c.address || '';
+  populateStateDropdown(document.getElementById('ec_state'), c.state);
+  document.getElementById('ec_pincode').value = c.pincode || '';
+  document.getElementById('ec_contact').value = c.contact || '';
+  document.getElementById('ec_email').value = c.email || '';
+  document.getElementById('ec_gstin').value = c.gstin || '';
+  document.getElementById('editCustomerModal').classList.remove('hidden');
+}
+function closeEditCustomer() {
+  document.getElementById('editCustomerModal').classList.add('hidden');
+}
+function saveEditCustomer() {
+  const id = document.getElementById('editCustomerModal').dataset.id;
+  const c = state.customers.find(x => x.id === id);
+  if (!c) return;
+  c.name = document.getElementById('ec_name').value.trim();
+  c.address = document.getElementById('ec_address').value.trim();
+  c.state = document.getElementById('ec_state').value;
+  c.pincode = document.getElementById('ec_pincode').value.trim();
+  c.contact = document.getElementById('ec_contact').value.trim();
+  c.email = document.getElementById('ec_email').value.trim();
+  c.gstin = document.getElementById('ec_gstin').value.trim().toUpperCase();
+  c.updated_at = new Date().toISOString();
+  saveState('customers');
+  closeEditCustomer();
+  renderCustomers();
+  toast('Customer updated', 'success');
+}
+function deleteCustomer(id) {
+  const c = state.customers.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`Delete customer "${c.name}"? They'll no longer appear in autocomplete.`)) return;
+  state.customers = state.customers.filter(x => x.id !== id);
+  saveState();
+  // Overwrite for deletes
+  if (drive.accessToken && drive.fileIds.customers) {
+    uploadDriveFile(drive.fileIds.customers, JSON.stringify(state.customers))
+      .then(() => { drive.lastSync = new Date(); updateSyncUI('connected'); })
+      .catch(e => toast('Drive sync failed: ' + e.message, 'error'));
+  }
+  renderCustomers();
+  toast('Customer deleted', 'success');
+}
+
+function exportCustomers() {
+  const headers = ['Name', 'Address', 'State', 'Pincode', 'Contact', 'Email', 'GSTIN', 'Order Count'];
+  const rows = state.customers.map(c => [
+    c.name, c.address, stateName(c.state), c.pincode, c.contact, c.email, c.gstin, c.order_count || 1
+  ]);
+  const csv = [headers, ...rows]
+    .map(row => row.map(cell => {
+      const s = String(cell ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(','))
+    .join('\n');
+  downloadFile(csv, `involens_customers_${todayStr()}.csv`, 'text/csv');
+  toast('Customers exported', 'success');
+}
+
+// ============================================================
+// MORE HELPERS
+// ============================================================
+function stateName(code) {
+  if (!code) return '';
+  const s = INDIAN_STATES.find(x => x[0] === code);
+  return s ? s[1] : code;
+}
+function formatDateShort(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+function escapeAttr(s) {
+  return String(s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+// ============================================================
+// TAB SWITCH HOOK — re-render on switch
+// ============================================================
+const originalSwitchTab = switchTab;
+switchTab = function(name) {
+  originalSwitchTab(name);
+  if (name === 'history') renderHistory();
+  else if (name === 'customers') renderCustomers();
+  else if (name === 'invoice') {
+    // Re-render to handle case where settings changed
+    renderLineItems();
+    recalcSummary();
+  }
+};
+// Re-attach click handlers using the new switchTab
+document.querySelectorAll('.tab').forEach(tab => {
+  // Remove old handler first
+  const newTab = tab.cloneNode(true);
+  tab.parentNode.replaceChild(newTab, tab);
+  newTab.addEventListener('click', () => switchTab(newTab.dataset.tab));
+});
+
+
+// ============================================================
+// GOOGLE DRIVE SYNC
+// ============================================================
+const DRIVE_CONFIG = {
+  CLIENT_ID: '121246383704-abtnoebdjrg70tqr7bngjg1h7c212vv0.apps.googleusercontent.com',
+  FOLDER_ID: '1v5oo7acB9o9JcbMSGkMrzXXsYMbh_XjP',
+  SCOPES: 'https://www.googleapis.com/auth/drive.file',
+  FILES: {
+    settings:  'involens_settings.json',
+    products:  'involens_products.json',
+    customers: 'involens_customers.json',
+    invoices:  'involens_invoices.json',
+  },
+};
+
+const drive = {
+  tokenClient: null,
+  accessToken: null,
+  fileIds: {},          // { settings: 'fileId', products: 'fileId', ... }
+  ready: false,
+  syncing: false,
+  lastSync: null,
+  lastSyncError: null,
+  userEmail: null,
+};
+
+// --- GIS bootstrap ---
+function initGIS() {
+  if (typeof google === 'undefined' || !google.accounts) {
+    // GIS not loaded yet — try again
+    setTimeout(initGIS, 200);
+    return;
+  }
+  drive.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: DRIVE_CONFIG.CLIENT_ID,
+    scope: DRIVE_CONFIG.SCOPES,
+    callback: handleTokenResponse,
+    error_callback: (err) => {
+      console.error('OAuth error:', err);
+      drive.syncing = false;
+      updateSyncUI('error', err.message || 'Sign-in cancelled');
+    },
+  });
+  drive.ready = true;
+
+  // Check if previously connected — restore from session
+  const saved = sessionStorage.getItem('involens_drive_token');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.exp && parsed.exp > Date.now()) {
+        drive.accessToken = parsed.token;
+        drive.userEmail = parsed.email;
+        // Validate token by attempting a sync
+        bootstrapDriveSession();
+      }
+    } catch {}
+  }
+}
+
+function handleTokenResponse(resp) {
+  if (resp.error) {
+    drive.syncing = false;
+    updateSyncUI('error', resp.error);
+    return;
+  }
+  drive.accessToken = resp.access_token;
+  // Token expires in resp.expires_in seconds — store with buffer
+  const expMs = Date.now() + (parseInt(resp.expires_in || 3500) - 60) * 1000;
+  sessionStorage.setItem('involens_drive_token', JSON.stringify({
+    token: drive.accessToken,
+    exp: expMs,
+    email: drive.userEmail,
+  }));
+  bootstrapDriveSession();
+}
+
+async function bootstrapDriveSession() {
+  try {
+    updateSyncUI('connecting', 'Connecting to Drive...');
+    // Get user email
+    const u = await driveFetch('https://www.googleapis.com/oauth2/v2/userinfo');
+    drive.userEmail = u.email;
+    sessionStorage.setItem('involens_drive_token', JSON.stringify({
+      token: drive.accessToken,
+      exp: JSON.parse(sessionStorage.getItem('involens_drive_token') || '{}').exp || (Date.now() + 3500000),
+      email: u.email,
+    }));
+    // Discover or create files
+    await discoverFiles();
+    // Pull from Drive
+    await pullAllFromDrive();
+    drive.lastSync = new Date();
+    drive.lastSyncError = null;
+    updateSyncUI('connected');
+    toast(`Connected as ${drive.userEmail}`, 'success');
+  } catch (e) {
+    console.error('Drive bootstrap failed:', e);
+    drive.lastSyncError = e.message;
+    updateSyncUI('error', e.message);
+    toast('Drive connection failed: ' + e.message, 'error');
+  }
+}
+
+function connectDrive() {
+  if (!drive.ready) {
+    toast('Google Sign-In not ready yet — try again in a moment', 'error');
+    return;
+  }
+  drive.tokenClient.requestAccessToken({ prompt: '' });
+}
+
+function disconnectDrive() {
+  if (!confirm('Disconnect from Drive? Local data will remain. You can reconnect anytime.')) return;
+  if (drive.accessToken && typeof google !== 'undefined') {
+    google.accounts.oauth2.revoke(drive.accessToken, () => {});
+  }
+  drive.accessToken = null;
+  drive.fileIds = {};
+  drive.userEmail = null;
+  sessionStorage.removeItem('involens_drive_token');
+  updateSyncUI('disconnected');
+  toast('Disconnected from Drive', 'success');
+}
+
+function syncNow() {
+  if (!drive.accessToken) {
+    toast('Not connected to Drive', 'error');
+    return;
+  }
+  pullAllFromDrive().then(() => {
+    drive.lastSync = new Date();
+    updateSyncUI('connected');
+    toast('Synced from Drive', 'success');
+  }).catch(e => {
+    drive.lastSyncError = e.message;
+    updateSyncUI('error', e.message);
+    toast('Sync failed: ' + e.message, 'error');
+  });
+}
+
+// --- Drive REST helpers ---
+async function driveFetch(url, options = {}) {
+  if (!drive.accessToken) throw new Error('Not authenticated');
+  const headers = {
+    'Authorization': 'Bearer ' + drive.accessToken,
+    ...(options.headers || {}),
+  };
+  const resp = await fetch(url, { ...options, headers });
+  if (resp.status === 401) {
+    // Token expired
+    drive.accessToken = null;
+    sessionStorage.removeItem('involens_drive_token');
+    updateSyncUI('disconnected');
+    throw new Error('Session expired — please reconnect');
+  }
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Drive API ${resp.status}: ${text.slice(0, 200)}`);
+  }
+  const ctype = resp.headers.get('content-type') || '';
+  if (ctype.includes('application/json')) return resp.json();
+  return resp.text();
+}
+
+async function discoverFiles() {
+  // Find existing files in folder, create if missing
+  const q = encodeURIComponent(`'${DRIVE_CONFIG.FOLDER_ID}' in parents and trashed = false`);
+  const result = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=100`);
+  const existing = {};
+  (result.files || []).forEach(f => {
+    existing[f.name] = f.id;
+  });
+
+  for (const [key, name] of Object.entries(DRIVE_CONFIG.FILES)) {
+    if (existing[name]) {
+      drive.fileIds[key] = existing[name];
+    } else {
+      drive.fileIds[key] = await createDriveFile(name);
+    }
+  }
+}
+
+async function createDriveFile(name) {
+  const meta = {
+    name,
+    parents: [DRIVE_CONFIG.FOLDER_ID],
+    mimeType: 'application/json',
+  };
+  const body = JSON.stringify(meta);
+  const result = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+  // Initialize with empty content
+  await uploadDriveFile(result.id, getInitialContent(name));
+  return result.id;
+}
+
+function getInitialContent(name) {
+  if (name === DRIVE_CONFIG.FILES.settings)  return JSON.stringify(state.settings);
+  if (name === DRIVE_CONFIG.FILES.products)  return JSON.stringify(state.products);
+  if (name === DRIVE_CONFIG.FILES.customers) return JSON.stringify(state.customers);
+  if (name === DRIVE_CONFIG.FILES.invoices)  return JSON.stringify(state.invoices);
+  return '{}';
+}
+
+async function uploadDriveFile(fileId, content) {
+  const url = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
+  return driveFetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: content,
+  });
+}
+
+async function downloadDriveFile(fileId) {
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  return driveFetch(url);
+}
+
+// --- Pull / Push ---
+async function pullAllFromDrive() {
+  // Pull all 4 files in parallel, replace local state
+  const [settings, products, customers, invoices] = await Promise.all([
+    downloadDriveFile(drive.fileIds.settings).catch(() => null),
+    downloadDriveFile(drive.fileIds.products).catch(() => null),
+    downloadDriveFile(drive.fileIds.customers).catch(() => null),
+    downloadDriveFile(drive.fileIds.invoices).catch(() => null),
+  ]);
+
+  if (settings && typeof settings === 'object') {
+    state.settings = { ...DEFAULT_SETTINGS, ...settings };
+    if (!state.settings.overrides) state.settings.overrides = [...DEFAULT_SETTINGS.overrides];
+  }
+  if (Array.isArray(products) && products.length > 0) {
+    state.products = products;
+  } else if (Array.isArray(products) && products.length === 0 && state.products.length > 0) {
+    // Drive products empty but we have local seed — push our seed up
+    await uploadDriveFile(drive.fileIds.products, JSON.stringify(state.products));
+  }
+  if (Array.isArray(customers)) state.customers = customers;
+  if (Array.isArray(invoices)) state.invoices = invoices;
+
+  saveState();
+
+  // Re-render visible UI
+  renderSettings();
+  renderProducts();
+  renderHistory();
+  renderCustomers();
+  if (document.querySelector('.tab.active')?.dataset.tab === 'invoice') {
+    renderLineItems();
+    recalcSummary();
+  }
+}
+
+// Push specific entity to Drive — with merge for invoices/customers (avoid clobbering concurrent writes)
+async function pushToDrive(kind) {
+  if (!drive.accessToken || !drive.fileIds[kind]) return;
+  try {
+    drive.syncing = true;
+    updateSyncUI('syncing');
+
+    if (kind === 'invoices' || kind === 'customers') {
+      // Merge: fetch latest, merge with local, write back
+      const remote = await downloadDriveFile(drive.fileIds[kind]).catch(() => []);
+      const remoteArr = Array.isArray(remote) ? remote : [];
+      const merged = mergeById(remoteArr, state[kind]);
+      state[kind] = merged;
+      saveState();
+      await uploadDriveFile(drive.fileIds[kind], JSON.stringify(merged));
+    } else {
+      // settings, products: simple last-write-wins
+      const payload = kind === 'settings' ? state.settings : state[kind];
+      await uploadDriveFile(drive.fileIds[kind], JSON.stringify(payload));
+    }
+
+    drive.lastSync = new Date();
+    drive.lastSyncError = null;
+    drive.syncing = false;
+    updateSyncUI('connected');
+  } catch (e) {
+    drive.syncing = false;
+    drive.lastSyncError = e.message;
+    updateSyncUI('error', e.message);
+    console.error(`Push ${kind} failed:`, e);
+    toast(`Sync failed: ${e.message}`, 'error');
+  }
+}
+
+function mergeById(remote, local) {
+  // Both arrays of objects with `id` and `updated_at` (ISO string)
+  const map = new Map();
+  for (const item of remote) {
+    if (item && item.id) map.set(item.id, item);
+  }
+  for (const item of local) {
+    if (!item || !item.id) continue;
+    const existing = map.get(item.id);
+    if (!existing) {
+      map.set(item.id, item);
+    } else {
+      // Newer wins
+      const lTime = new Date(item.updated_at || item.created_at || 0).getTime();
+      const rTime = new Date(existing.updated_at || existing.created_at || 0).getTime();
+      if (lTime >= rTime) map.set(item.id, item);
+    }
+  }
+  // Sort: newest first
+  return Array.from(map.values()).sort((a, b) => {
+    const at = new Date(a.created_at || a.updated_at || 0).getTime();
+    const bt = new Date(b.created_at || b.updated_at || 0).getTime();
+    return bt - at;
+  });
+}
+
+// --- Sync UI ---
+function updateSyncUI(status, message = '') {
+  const pill = document.getElementById('syncStatus');
+  const connectBtn = document.getElementById('connectDriveBtn');
+  const disconnectBtn = document.getElementById('disconnectDriveBtn');
+  const syncBtn = document.getElementById('syncNowBtn');
+  const lastSyncLabel = document.getElementById('lastSyncLabel');
+
+  switch (status) {
+    case 'connected':
+      pill.className = 'auth-pill connected';
+      pill.textContent = '✓ Drive synced';
+      pill.title = drive.userEmail || '';
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'inline-flex';
+      syncBtn.style.display = 'inline-flex';
+      break;
+    case 'syncing':
+      pill.className = 'auth-pill';
+      pill.textContent = 'Syncing...';
+      break;
+    case 'connecting':
+      pill.className = 'auth-pill';
+      pill.textContent = message || 'Connecting...';
+      break;
+    case 'error':
+      pill.className = 'auth-pill';
+      pill.style.background = 'var(--danger-soft)';
+      pill.style.color = 'var(--danger)';
+      pill.textContent = 'Sync error';
+      pill.title = message;
+      break;
+    case 'disconnected':
+    default:
+      pill.className = 'auth-pill local';
+      pill.style.background = '';
+      pill.style.color = '';
+      pill.textContent = 'Local mode';
+      pill.title = '';
+      connectBtn.style.display = 'inline-flex';
+      disconnectBtn.style.display = 'none';
+      syncBtn.style.display = 'none';
+      break;
+  }
+
+  if (drive.lastSync) {
+    lastSyncLabel.textContent = 'last sync: ' + formatRelative(drive.lastSync);
+  } else {
+    lastSyncLabel.textContent = '';
+  }
+}
+
+function formatRelative(d) {
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return d.toLocaleDateString();
+}
+
+// Refresh "last sync" label every 30s
+setInterval(() => {
+  if (drive.lastSync) {
+    document.getElementById('lastSyncLabel').textContent = 'last sync: ' + formatRelative(drive.lastSync);
+  }
+}, 30000);
+
+// Auto-sync on tab focus
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && drive.accessToken && drive.lastSync) {
+    const since = (Date.now() - drive.lastSync.getTime()) / 1000;
+    if (since > 60) {
+      // Pull silently
+      pullAllFromDrive().then(() => {
+        drive.lastSync = new Date();
+        updateSyncUI('connected');
+      }).catch(e => {
+        console.warn('Auto-sync failed:', e);
+      });
+    }
+  }
+});
+
+// --- Hook into save points ---
+// Wrap saveState to also push relevant entity to Drive (debounced)
+const _origSaveState = saveState;
+let _pushTimers = {};
+saveState = function(kind = null) {
+  _origSaveState();
+  if (!drive.accessToken) return;
+  // If specific kind given, push it (debounced)
+  if (kind) {
+    clearTimeout(_pushTimers[kind]);
+    _pushTimers[kind] = setTimeout(() => pushToDrive(kind), 500);
+  }
+};
+
+// Helper to call when settings change
+function pushSettings() { saveState('settings'); }
+function pushProducts() { saveState('products'); }
+function pushCustomers() { saveState('customers'); }
+function pushInvoices() { saveState('invoices'); }
+
+
+// ============================================================
+loadState();
+renderSettings();
+renderProducts();
+initInvoiceForm();
+renderHistory();
+renderCustomers();
+
+// Reset is_replacement banner state
+updateReplacementBanner();
+
+// Initialize Google Drive sync
+initGIS();
+updateSyncUI('disconnected');
+
+console.log('InvoLens v1 loaded.', {
+  products: state.products.length,
+  customers: state.customers.length,
+  invoices: state.invoices.length,
+});
+</script>
+</body>
+</html>
