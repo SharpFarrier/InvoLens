@@ -445,107 +445,304 @@
     margin-bottom: 12px;
   }
 
-  /* ============ PRINT VIEW ============ */
+  /* ============ PRINT VIEW — ELEGANT ============ */
   #printView {
     display: none;
     background: white;
-    color: #000;
+    color: #1c1917;
     padding: 0;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 11px;
-    line-height: 1.4;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
   }
   #printView .print-page {
     width: 210mm;
     min-height: 297mm;
-    padding: 12mm 12mm;
+    padding: 16mm 16mm 14mm;
     margin: 0 auto;
     background: white;
     box-sizing: border-box;
+    position: relative;
+    color: #1c1917;
   }
-  #printView .print-title {
-    text-align: center;
-    font-size: 16px;
-    font-weight: bold;
-    background: #d9d9d9;
-    padding: 6px;
-    margin: 0 0 0 0;
-    border: 1px solid #000;
+  /* Brand bar at top */
+  #printView .brand-bar {
+    height: 5px;
+    background: #b45309;
+    margin: -16mm -16mm 14mm;
   }
-  #printView table {
-    width: 100%;
-    border-collapse: collapse;
+  /* Header — two columns */
+  #printView .pv-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    margin-bottom: 22px;
+    align-items: flex-start;
   }
-  #printView .seller-table td {
-    border: 1px solid #000;
-    padding: 4px 8px;
-    vertical-align: top;
+  #printView .pv-seller {
+    line-height: 1.5;
   }
-  #printView .seller-table .label {
-    font-weight: bold;
-    background: #f5f5f5;
-    width: 90px;
+  #printView .pv-seller .seller-name {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1c1917;
+    margin-bottom: 4px;
+    letter-spacing: -0.01em;
   }
-  #printView .items-table th, #printView .items-table td {
-    border: 1px solid #000;
-    padding: 5px 6px;
-    text-align: left;
-    vertical-align: top;
-  }
-  #printView .items-table th {
-    background: #d9d9d9;
-    font-weight: bold;
-    text-align: center;
+  #printView .pv-seller .seller-meta {
     font-size: 10.5px;
+    color: #57534e;
+    margin-bottom: 1px;
   }
-  #printView .items-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-  #printView .items-table .ctr { text-align: center; }
-  #printView .summary-table td {
-    border: 1px solid #000;
-    padding: 5px 8px;
+  #printView .pv-seller .seller-gstin {
+    font-size: 10.5px;
+    color: #1c1917;
+    margin-top: 4px;
+    font-weight: 500;
   }
-  #printView .summary-table .label {
-    text-align: right; font-weight: 500;
-    background: #f9f9f9;
+  #printView .pv-doctype {
+    text-align: right;
   }
-  #printView .summary-table .value {
-    text-align: right; font-variant-numeric: tabular-nums;
-    width: 100px;
+  #printView .pv-doctype .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #b45309;
+    font-weight: 600;
+    margin-bottom: 2px;
   }
-  #printView .total-row td {
-    background: #d9d9d9 !important;
-    font-weight: bold; font-size: 12px;
+  #printView .pv-doctype .invoice-no {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1c1917;
+    font-variant-numeric: tabular-nums;
   }
-  #printView .footer-grid {
+  #printView .pv-doctype .invoice-date {
+    font-size: 11px;
+    color: #57534e;
+    margin-top: 2px;
+  }
+  /* Section heading */
+  #printView .pv-section-h {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #b45309;
+    font-weight: 600;
+    margin: 18px 0 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e7e5e4;
+  }
+  /* Consignee block */
+  #printView .pv-consignee {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    margin-top: 8px;
+    gap: 6px 24px;
+    padding: 10px 14px;
+    background: #fafaf9;
+    border-radius: 4px;
+    margin-bottom: 4px;
   }
-  #printView .footer-cell {
-    border: 1px solid #000;
-    padding: 6px 8px;
-    min-height: 70px;
+  #printView .pv-consignee .field-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #a8a29e;
+    margin-bottom: 1px;
+    font-weight: 500;
   }
-  #printView .declaration {
-    margin-top: 8px;
-    padding: 6px 8px;
-    border: 1px solid #000;
+  #printView .pv-consignee .field-value {
+    font-size: 11px;
+    color: #1c1917;
+    margin-bottom: 6px;
+  }
+  #printView .pv-consignee .full {
+    grid-column: 1 / -1;
+  }
+  /* Items table — minimal, financial */
+  #printView .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+  }
+  #printView .items-table thead tr {
+    border-bottom: 2px solid #1c1917;
+  }
+  #printView .items-table th {
+    padding: 8px 6px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #57534e;
+    text-align: left;
+    background: transparent;
+  }
+  #printView .items-table td {
+    padding: 10px 6px;
+    border-bottom: 1px solid #e7e5e4;
+    vertical-align: top;
+    font-size: 11px;
+  }
+  #printView .items-table td.num,
+  #printView .items-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  #printView .items-table td.ctr,
+  #printView .items-table th.ctr { text-align: center; }
+  #printView .items-table .product-name {
+    font-weight: 500;
+    color: #1c1917;
+    line-height: 1.4;
+  }
+  #printView .items-table .product-meta {
     font-size: 10px;
+    color: #78716c;
+    margin-top: 3px;
+  }
+  /* Summary panel — right-aligned */
+  #printView .summary-wrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+  }
+  #printView .summary-box {
+    width: 50%;
+    min-width: 280px;
+  }
+  #printView .summary-box .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 12px;
+    font-size: 11px;
+  }
+  #printView .summary-box .row .label {
+    color: #57534e;
+  }
+  #printView .summary-box .row .val {
+    font-variant-numeric: tabular-nums;
+    color: #1c1917;
+  }
+  #printView .summary-box .total-row {
+    margin-top: 6px;
+    padding: 12px;
+    background: #fef3c7;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  #printView .summary-box .total-row .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    color: #92400e;
+  }
+  #printView .summary-box .total-row .val {
+    font-size: 18px;
+    font-weight: 700;
+    color: #92400e;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Amount in words */
+  #printView .pv-words {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: #fafaf9;
+    border-left: 3px solid #b45309;
+    font-size: 11px;
+    border-radius: 0 4px 4px 0;
+  }
+  #printView .pv-words .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #a8a29e;
+    margin-bottom: 2px;
+    font-weight: 500;
+  }
+  #printView .pv-words .value {
+    color: #1c1917;
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+  /* Replacement stamp */
+  #printView .replacement-stamp {
+    margin-top: 14px;
+    padding: 14px;
+    border: 2px solid #c2410c;
+    color: #c2410c;
     text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-radius: 4px;
+  }
+  /* Footer */
+  #printView .pv-footer {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid #e7e5e4;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  #printView .pv-footer .col-left {
+    font-size: 10.5px;
+    color: #57534e;
+  }
+  #printView .pv-footer .col-left .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #a8a29e;
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+  #printView .pv-footer .col-left .value {
+    color: #1c1917;
+    margin-bottom: 8px;
+  }
+  #printView .pv-footer .col-right {
+    text-align: right;
+  }
+  #printView .pv-footer .col-right .for-line {
+    font-size: 11px;
+    color: #57534e;
+    margin-bottom: 8px;
+  }
+  #printView .pv-footer .col-right .for-line strong {
+    color: #1c1917;
   }
   #printView .signatory-img {
-    max-height: 50px;
+    max-height: 48px;
+    margin: 6px 0 6px auto;
     display: block;
-    margin: 4px 0;
   }
-  #printView .replacement-stamp {
-    color: #c00;
-    font-size: 14px;
-    font-weight: bold;
+  #printView .pv-footer .col-right .signatory-name {
+    font-size: 11px;
+    color: #1c1917;
+    font-weight: 500;
+    border-top: 1px solid #d6d3d1;
+    padding-top: 6px;
+    display: inline-block;
+    min-width: 140px;
+  }
+  /* Declaration */
+  #printView .pv-declaration {
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 1px solid #e7e5e4;
+    font-size: 9.5px;
+    color: #78716c;
+    line-height: 1.5;
     text-align: center;
-    border: 2px solid #c00;
-    padding: 4px;
-    margin-top: 6px;
+  }
+  /* Logo */
+  #printView .pv-logo {
+    max-height: 36px;
+    margin-bottom: 8px;
   }
 
   /* Print-specific CSS */
@@ -557,11 +754,16 @@
       position: absolute; top: 0; left: 0; width: 100%;
     }
     #printView .print-page {
-      padding: 8mm 10mm;
+      padding: 14mm 16mm 12mm;
       margin: 0;
+    }
+    #printView .brand-bar {
+      margin: -14mm -16mm 12mm;
     }
     .topbar, .tabs { display: none !important; }
     @page { size: A4; margin: 0; }
+    /* Ensure colours print */
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   }
 
   /* Modes */
@@ -775,15 +977,29 @@
 
     <div class="toolbar">
       <input type="text" id="historySearch" placeholder="Search by order ID, customer name, SKU…" oninput="renderHistory()">
-      <select id="historyFilterMonth" onchange="renderHistory()" style="max-width: 180px;">
+      <select id="historyFilterMonth" onchange="renderHistory()" style="max-width: 160px;">
         <option value="">All months</option>
       </select>
+      <input type="date" id="historyDateFrom" onchange="renderHistory()" title="From date" style="max-width: 150px;">
+      <input type="date" id="historyDateTo" onchange="renderHistory()" title="To date" style="max-width: 150px;">
+      <button class="btn btn-sm" onclick="clearHistoryFilters()">Clear filters</button>
+    </div>
+
+    <!-- Bulk action bar — only shown when 1+ rows selected -->
+    <div id="bulkActionBar" class="hidden" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); margin-bottom: 12px;">
+      <span style="font-weight: 500;"><span id="bulkSelectedCount">0</span> selected</span>
+      <span class="text-muted" style="font-size: 12px;">·</span>
+      <button class="btn btn-sm btn-primary" onclick="bulkPrintSelected()">📄 Print as PDF</button>
+      <button class="btn btn-sm" onclick="bulkExportSelectedCSV()">Export CSV</button>
+      <button class="btn btn-sm btn-danger" onclick="bulkDeleteSelected()">Delete</button>
+      <button class="btn btn-sm btn-ghost" onclick="clearBulkSelection()" style="margin-left: auto;">Clear selection</button>
     </div>
 
     <div class="table-wrap">
       <table class="data-table" id="historyTable">
         <thead>
           <tr>
+            <th style="width: 30px;"><input type="checkbox" id="selectAllInvoices" onchange="toggleSelectAllInvoices(this.checked)"></th>
             <th>Date</th>
             <th>Invoice No</th>
             <th>Consignee</th>
@@ -955,6 +1171,11 @@
         <label>
           <div class="label-text">Authorised By</div>
           <input type="text" id="set_signatory_name" value="Partner">
+        </label>
+        <label class="full">
+          <div class="label-text">Logo (optional)</div>
+          <input type="file" id="set_logo_file" accept="image/*" onchange="handleLogoUpload(event)">
+          <div id="logoPreview" style="margin-top:8px;"></div>
         </label>
         <label class="full">
           <div class="label-text">Signature Image (optional)</div>
@@ -1209,6 +1430,7 @@ const DEFAULT_SETTINGS = {
   email: '',
   signatory_name: 'Partner',
   signature_b64: '',
+  logo_b64: '',
   default_hsn: '9403',
   default_gst: 18,
   total_mode: 'inclusive',
@@ -1328,6 +1550,7 @@ function renderSettings() {
   document.getElementById('set_currency').value = s.currency;
   document.getElementById('set_declaration').value = s.declaration;
   renderSignaturePreview();
+  renderLogoPreview();
   renderOverrides();
 }
 
@@ -1341,6 +1564,20 @@ function renderSignaturePreview() {
       </div>`;
   } else {
     el.innerHTML = '<div class="help">No signature uploaded</div>';
+  }
+}
+
+function renderLogoPreview() {
+  const el = document.getElementById('logoPreview');
+  if (!el) return;
+  if (state.settings.logo_b64) {
+    el.innerHTML = `
+      <div class="row" style="gap: 12px; align-items: center;">
+        <img src="${state.settings.logo_b64}" style="max-height: 60px; border: 1px solid var(--border); border-radius: 4px; padding: 4px; background: white;">
+        <button class="btn btn-sm btn-danger" onclick="removeLogo()">Remove</button>
+      </div>`;
+  } else {
+    el.innerHTML = '<div class="help">No logo uploaded — invoice will use text wordmark</div>';
   }
 }
 
@@ -1361,10 +1598,33 @@ function handleSignatureUpload(e) {
   reader.readAsDataURL(file);
 }
 
+function handleLogoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 500 * 1024) {
+    toast('Logo image too large (max 500KB)', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    state.settings.logo_b64 = ev.target.result;
+    saveState('settings');
+    renderLogoPreview();
+    toast('Logo uploaded', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
 function removeSignature() {
   state.settings.signature_b64 = '';
   saveState('settings');
   renderSignaturePreview();
+}
+
+function removeLogo() {
+  state.settings.logo_b64 = '';
+  saveState('settings');
+  renderLogoPreview();
 }
 
 function renderOverrides() {
@@ -2230,103 +2490,114 @@ function printInvoice(invoice) {
   }, 100);
 }
 
+function printMultipleInvoices(invoices) {
+  if (!invoices || invoices.length === 0) return;
+  const pv = document.getElementById('printView');
+  // Render each invoice with a forced page break between them
+  pv.innerHTML = invoices.map((inv, i) => {
+    const html = renderPrintHTML(inv);
+    // Add page break style on all but the last
+    if (i < invoices.length - 1) {
+      return html.replace('<div class="print-page">', '<div class="print-page" style="page-break-after: always;">');
+    }
+    return html;
+  }).join('');
+  document.body.classList.add('printing');
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      document.body.classList.remove('printing');
+    }, 300);
+  }, 100);
+}
+
 function renderPrintHTML(inv) {
   const s = inv.seller_snapshot || state.settings;
   const t = inv.totals;
   const itemRows = inv.lines.map(L => {
-    const lineTotal = round2(L.unit_inclusive * L.qty);
     return `
       <tr>
         <td class="ctr">${L.sr}</td>
-        <td>${escapeHtml(L.product_name)}<br><span style="font-size:10px;color:#555;">SKU: ${escapeHtml(L.sku)}</span></td>
-        <td class="ctr">${escapeHtml(L.hsn)}</td>
+        <td>
+          <div class="product-name">${escapeHtml(L.product_name)}</div>
+          <div class="product-meta">SKU ${escapeHtml(L.sku)} · HSN ${escapeHtml(L.hsn)}</div>
+        </td>
         <td class="num">${L.unit_inclusive.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
         <td class="ctr">${L.qty}</td>
-        <td class="num">${L.unit_taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-        <td class="ctr">${L.discount_pct || 0}%</td>
         <td class="num">${(L.unit_taxable * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+        <td class="num">${(L.unit_inclusive * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
       </tr>
     `;
   }).join('');
 
-  const taxRows = t.is_inter_state
-    ? `<tr><td class="label">IGST</td><td class="value">${t.igst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td></tr>
-       <tr><td class="label">CGST</td><td class="value">—</td></tr>
-       <tr><td class="label">SGST</td><td class="value">—</td></tr>`
-    : `<tr><td class="label">IGST</td><td class="value">—</td></tr>
-       <tr><td class="label">CGST</td><td class="value">${t.cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td></tr>
-       <tr><td class="label">SGST</td><td class="value">${t.sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td></tr>`;
+  const taxLines = t.is_inter_state
+    ? `<div class="row"><span class="label">IGST</span><span class="val">${t.igst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>`
+    : `<div class="row"><span class="label">CGST</span><span class="val">${t.cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>
+       <div class="row"><span class="label">SGST</span><span class="val">${t.sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>`;
 
   const buyerStateName = stateName(inv.consignee.state);
   const sellerStateName = stateName(s.state);
+  const currency = s.currency || '₹';
 
   return `
     <div class="print-page">
-      <div class="print-title">Tax Invoice</div>
+      <div class="brand-bar"></div>
 
-      <table class="seller-table" style="margin-top: 0;">
-        <tr>
-          <td colspan="4" style="font-weight: bold; font-size: 13px;">${escapeHtml(s.company)}</td>
-        </tr>
-        <tr>
-          <td class="label">Address:</td>
-          <td colspan="3">${escapeHtml(s.address)}</td>
-        </tr>
-        <tr>
-          <td class="label">GSTIN:</td>
-          <td>${escapeHtml(s.gstin)}</td>
-          <td class="label" style="width: 90px;">State:</td>
-          <td>${escapeHtml(sellerStateName)}</td>
-        </tr>
-        <tr>
-          <td class="label">Email:</td>
-          <td colspan="3">${escapeHtml(s.email || '-')}</td>
-        </tr>
-      </table>
+      <div class="pv-header">
+        <div class="pv-seller">
+          ${s.logo_b64 ? `<img src="${s.logo_b64}" class="pv-logo" alt="logo">` : ''}
+          <div class="seller-name">${escapeHtml(s.company)}</div>
+          <div class="seller-meta">${escapeHtml(s.address)}</div>
+          ${s.email ? `<div class="seller-meta">${escapeHtml(s.email)}</div>` : ''}
+          <div class="seller-gstin">GSTIN: ${escapeHtml(s.gstin)} · ${escapeHtml(sellerStateName)}</div>
+        </div>
+        <div class="pv-doctype">
+          <div class="label">${inv.is_replacement ? 'Replacement Invoice' : 'Tax Invoice'}</div>
+          <div class="invoice-no">${escapeHtml(inv.order_id)}</div>
+          <div class="invoice-date">${formatDateForPrint(inv.date)}</div>
+        </div>
+      </div>
 
-      <table class="seller-table" style="margin-top: 6px;">
-        <tr>
-          <td class="label">Invoice No:</td>
-          <td>${escapeHtml(inv.order_id)}</td>
-          <td class="label" style="width: 90px;">Invoice Date:</td>
-          <td>${formatDateForPrint(inv.date)}</td>
-        </tr>
-      </table>
+      <div class="pv-section-h">Bill To</div>
+      <div class="pv-consignee">
+        <div class="full">
+          <div class="field-label">Consignee</div>
+          <div class="field-value"><strong>${escapeHtml(inv.consignee.name)}</strong></div>
+        </div>
+        <div class="full">
+          <div class="field-label">Address</div>
+          <div class="field-value">${escapeHtml(inv.consignee.address)}${inv.consignee.pincode ? ' — ' + escapeHtml(inv.consignee.pincode) : ''}</div>
+        </div>
+        <div>
+          <div class="field-label">State</div>
+          <div class="field-value">${escapeHtml(buyerStateName)}</div>
+        </div>
+        <div>
+          <div class="field-label">Contact</div>
+          <div class="field-value">${escapeHtml(inv.consignee.contact || '—')}</div>
+        </div>
+        ${inv.consignee.email ? `
+        <div>
+          <div class="field-label">Email</div>
+          <div class="field-value">${escapeHtml(inv.consignee.email)}</div>
+        </div>` : ''}
+        ${inv.consignee.gstin ? `
+        <div>
+          <div class="field-label">Buyer GSTIN</div>
+          <div class="field-value">${escapeHtml(inv.consignee.gstin)}</div>
+        </div>` : ''}
+      </div>
 
-      <table class="seller-table" style="margin-top: 6px;">
-        <tr>
-          <td class="label">Consignee:</td>
-          <td>${escapeHtml(inv.consignee.name)}</td>
-          <td class="label" style="width: 90px;">Kind Attn:</td>
-          <td>${escapeHtml(inv.consignee.name)}</td>
-        </tr>
-        <tr>
-          <td class="label">Address:</td>
-          <td colspan="3">${escapeHtml(inv.consignee.address)}, ${escapeHtml(buyerStateName)}${inv.consignee.pincode ? ' ' + escapeHtml(inv.consignee.pincode) : ''}</td>
-        </tr>
-        <tr>
-          <td class="label">Contact:</td>
-          <td>${escapeHtml(inv.consignee.contact || '-')}</td>
-          <td class="label" style="width: 90px;">Email:</td>
-          <td>${escapeHtml(inv.consignee.email || '-')}</td>
-        </tr>
-        ${inv.consignee.gstin ? `<tr>
-          <td class="label">Buyer GSTIN:</td>
-          <td colspan="3">${escapeHtml(inv.consignee.gstin)}</td>
-        </tr>` : ''}
-      </table>
-
-      <table class="items-table" style="margin-top: 8px;">
+      <div class="pv-section-h">Items</div>
+      <table class="items-table">
         <thead>
           <tr>
-            <th style="width: 6%;">Sr.no</th>
+            <th class="ctr" style="width: 5%;">#</th>
             <th>Product</th>
-            <th style="width: 8%;">HSN</th>
-            <th style="width: 10%;">Unit Price</th>
-            <th style="width: 6%;">Qty</th>
-            <th style="width: 11%;">Net Amount</th>
-            <th style="width: 9%;">Discount %</th>
-            <th style="width: 12%;">Total Amount</th>
+            <th class="num" style="width: 13%;">Unit Price</th>
+            <th class="ctr" style="width: 6%;">Qty</th>
+            <th class="num" style="width: 14%;">Taxable</th>
+            <th class="num" style="width: 14%;">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -2334,45 +2605,53 @@ function renderPrintHTML(inv) {
         </tbody>
       </table>
 
-      <table class="summary-table" style="margin-top: 6px; width: 50%; margin-left: auto;">
-        <tr>
-          <td class="label">Taxable Value</td>
-          <td class="value">${t.taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-        </tr>
-        ${taxRows}
-        <tr>
-          <td class="label">Shipping</td>
-          <td class="value">Included</td>
-        </tr>
-        <tr class="total-row">
-          <td class="label">Total (Inclusive of all taxes)</td>
-          <td class="value">${t.grand_total.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-        </tr>
-      </table>
+      <div class="summary-wrap">
+        <div class="summary-box">
+          <div class="row">
+            <span class="label">Taxable Value</span>
+            <span class="val">${currency} ${t.taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+          </div>
+          ${taxLines}
+          <div class="row">
+            <span class="label">Shipping</span>
+            <span class="val" style="color: #a8a29e; font-style: italic;">included</span>
+          </div>
+          <div class="total-row">
+            <span class="label">Total Payable</span>
+            <span class="val">${currency} ${t.grand_total.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+          </div>
+        </div>
+      </div>
 
-      <div style="margin-top: 6px; padding: 6px 8px; border: 1px solid #000; font-size: 11px;">
-        <strong>Amount in words:</strong> ${escapeHtml(numberToWordsIndian(t.grand_total))} Only
+      <div class="pv-words">
+        <div class="label">Amount in words</div>
+        <div class="value">${escapeHtml(numberToWordsIndian(t.grand_total))} only</div>
       </div>
 
       ${inv.is_replacement
-        ? `<div class="replacement-stamp">REPLACEMENT INVOICE — NO CHARGE</div>`
-        : `<div style="margin-top: 6px; padding: 6px 8px; border: 1px solid #000; font-size: 11px;">
-            <strong>Payment Terms:</strong> ${escapeHtml(s.payment_terms)}
-          </div>`}
+        ? `<div class="replacement-stamp">Replacement Invoice — No Charge</div>`
+        : ''}
 
-      <div class="footer-grid">
-        <div class="footer-cell">
-          <strong>Tracking ID:</strong> ${escapeHtml(inv.awb || '-')}
+      <div class="pv-footer">
+        <div class="col-left">
+          ${inv.awb ? `
+            <div class="label">Tracking ID</div>
+            <div class="value">${escapeHtml(inv.awb)}</div>
+          ` : ''}
+          ${!inv.is_replacement ? `
+            <div class="label">Payment Terms</div>
+            <div class="value">${escapeHtml(s.payment_terms)}</div>
+          ` : ''}
         </div>
-        <div class="footer-cell" style="text-align: right;">
-          <div style="font-weight: bold;">For ${escapeHtml(s.company)}</div>
-          ${s.signature_b64 ? `<img class="signatory-img" src="${s.signature_b64}" style="margin-left: auto;">` : '<div style="height: 40px;"></div>'}
-          <div>${escapeHtml(s.signatory_name || 'Authorised Signatory')}</div>
+        <div class="col-right">
+          <div class="for-line">For <strong>${escapeHtml(s.company)}</strong></div>
+          ${s.signature_b64 ? `<img class="signatory-img" src="${s.signature_b64}">` : '<div style="height: 48px;"></div>'}
+          <div class="signatory-name">${escapeHtml(s.signatory_name || 'Authorised Signatory')}</div>
         </div>
       </div>
 
-      <div class="declaration">
-        <strong>Declaration:</strong> ${escapeHtml(s.declaration)}
+      <div class="pv-declaration">
+        ${escapeHtml(s.declaration)}
       </div>
     </div>
   `;
@@ -2389,9 +2668,14 @@ function formatDateForPrint(dateStr) {
 // ============================================================
 // HISTORY TAB
 // ============================================================
+// Bulk selection state
+const _selectedInvoiceIds = new Set();
+
 function renderHistory() {
   const search = (document.getElementById('historySearch').value || '').toLowerCase().trim();
   const monthFilter = document.getElementById('historyFilterMonth').value;
+  const dateFrom = document.getElementById('historyDateFrom').value;
+  const dateTo = document.getElementById('historyDateTo').value;
   const tbody = document.getElementById('historyTbody');
 
   // Populate month filter
@@ -2417,7 +2701,10 @@ function renderHistory() {
 
   // Filter
   const filtered = state.invoices.filter(inv => {
-    if (monthFilter && (inv.date || '').slice(0, 7) !== monthFilter) return false;
+    const invDate = inv.date || '';
+    if (monthFilter && invDate.slice(0, 7) !== monthFilter) return false;
+    if (dateFrom && invDate < dateFrom) return false;
+    if (dateTo && invDate > dateTo) return false;
     if (!search) return true;
     const haystack = [
       inv.order_id, inv.consignee?.name, inv.consignee?.contact, inv.awb,
@@ -2426,16 +2713,25 @@ function renderHistory() {
     return haystack.includes(search);
   });
 
+  // Cleanse selection — remove IDs that are no longer in filtered list (filter changed)
+  const filteredIds = new Set(filtered.map(inv => inv.id));
+  for (const id of [..._selectedInvoiceIds]) {
+    if (!state.invoices.find(inv => inv.id === id)) _selectedInvoiceIds.delete(id);
+  }
+  updateBulkActionBar();
+
   tbody.innerHTML = '';
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 30px; color: var(--text-faint);">${state.invoices.length === 0 ? 'No invoices yet — create your first one in the New Invoice tab' : 'No invoices match your search'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding: 30px; color: var(--text-faint);">${state.invoices.length === 0 ? 'No invoices yet — create your first one in the New Invoice tab' : 'No invoices match your search'}</td></tr>`;
     return;
   }
 
   filtered.forEach(inv => {
     const tr = document.createElement('tr');
     const itemsCount = inv.lines?.length || 0;
+    const isChecked = _selectedInvoiceIds.has(inv.id);
     tr.innerHTML = `
+      <td><input type="checkbox" class="invoice-checkbox" data-id="${escapeAttr(inv.id)}" ${isChecked ? 'checked' : ''} onchange="toggleInvoiceSelection('${escapeAttr(inv.id)}', this.checked)"></td>
       <td>${formatDateShort(inv.date)}</td>
       <td class="mono" style="font-size: 11px;">${escapeHtml(inv.order_id)}${inv.is_replacement ? ' <span class="pill warn">RPL</span>' : ''}</td>
       <td>${escapeHtml(inv.consignee?.name || '')}</td>
@@ -2447,11 +2743,95 @@ function renderHistory() {
       <td>
         <button class="btn btn-sm" onclick="printInvoiceById('${escapeAttr(inv.id)}')">Print</button>
         <button class="btn btn-sm" onclick="loadInvoiceForEdit('${escapeAttr(inv.id)}')">Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteInvoice('${escapeAttr(inv.id)}')">Del</button>
       </td>
     `;
     tbody.appendChild(tr);
   });
+
+  // Update select-all checkbox state
+  const selectAllEl = document.getElementById('selectAllInvoices');
+  const allChecked = filtered.length > 0 && filtered.every(inv => _selectedInvoiceIds.has(inv.id));
+  if (selectAllEl) selectAllEl.checked = allChecked;
+}
+
+function clearHistoryFilters() {
+  document.getElementById('historySearch').value = '';
+  document.getElementById('historyFilterMonth').value = '';
+  document.getElementById('historyDateFrom').value = '';
+  document.getElementById('historyDateTo').value = '';
+  renderHistory();
+}
+
+function toggleInvoiceSelection(id, checked) {
+  if (checked) _selectedInvoiceIds.add(id);
+  else _selectedInvoiceIds.delete(id);
+  updateBulkActionBar();
+  // Update select-all state
+  const filteredVisible = document.querySelectorAll('.invoice-checkbox');
+  const allChecked = [...filteredVisible].length > 0 && [...filteredVisible].every(cb => cb.checked);
+  document.getElementById('selectAllInvoices').checked = allChecked;
+}
+
+function toggleSelectAllInvoices(checked) {
+  document.querySelectorAll('.invoice-checkbox').forEach(cb => {
+    cb.checked = checked;
+    const id = cb.dataset.id;
+    if (checked) _selectedInvoiceIds.add(id);
+    else _selectedInvoiceIds.delete(id);
+  });
+  updateBulkActionBar();
+}
+
+function clearBulkSelection() {
+  _selectedInvoiceIds.clear();
+  document.querySelectorAll('.invoice-checkbox').forEach(cb => cb.checked = false);
+  document.getElementById('selectAllInvoices').checked = false;
+  updateBulkActionBar();
+}
+
+function updateBulkActionBar() {
+  const count = _selectedInvoiceIds.size;
+  const bar = document.getElementById('bulkActionBar');
+  const countEl = document.getElementById('bulkSelectedCount');
+  if (count > 0) {
+    bar.classList.remove('hidden');
+    countEl.textContent = count;
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+function bulkPrintSelected() {
+  const ids = [..._selectedInvoiceIds];
+  if (ids.length === 0) return;
+  const invoices = state.invoices.filter(inv => ids.includes(inv.id));
+  if (invoices.length === 0) return;
+  printMultipleInvoices(invoices);
+}
+
+function bulkExportSelectedCSV() {
+  const ids = [..._selectedInvoiceIds];
+  if (ids.length === 0) return;
+  const selectedInvoices = state.invoices.filter(inv => ids.includes(inv.id));
+  exportInvoicesArray(selectedInvoices, `involens_invoices_selected_${todayStr()}.csv`);
+  toast(`Exported ${selectedInvoices.length} invoices`, 'success');
+}
+
+function bulkDeleteSelected() {
+  const ids = [..._selectedInvoiceIds];
+  if (ids.length === 0) return;
+  if (!confirm(`Delete ${ids.length} invoices? This cannot be undone.`)) return;
+  state.invoices = state.invoices.filter(inv => !ids.includes(inv.id));
+  _selectedInvoiceIds.clear();
+  saveState();
+  if (drive.accessToken && drive.fileIds.invoices) {
+    uploadDriveFile(drive.fileIds.invoices, JSON.stringify(state.invoices))
+      .then(() => { drive.lastSync = new Date(); updateSyncUI('connected'); })
+      .catch(e => toast('Drive sync failed: ' + e.message, 'error'));
+  }
+  document.getElementById('historyFilterMonth').innerHTML = '<option value="">All months</option>';
+  renderHistory();
+  toast(`Deleted ${ids.length} invoices`, 'success');
 }
 
 function printInvoiceById(id) {
@@ -2476,14 +2856,14 @@ function deleteInvoice(id) {
   toast('Invoice deleted', 'success');
 }
 
-function exportInvoices() {
+function exportInvoicesArray(invoices, filename) {
   const headers = [
     'Invoice No', 'Order Date', 'Consignee', 'Address', 'State', 'Pincode', 'Contact', 'Email', 'Buyer GSTIN',
     'SKU', 'Product Name', 'HSN', 'GST Rate', 'Qty', 'Unit Price (Incl)', 'Discount %',
     'Taxable', 'IGST', 'CGST', 'SGST', 'Grand Total', 'AWB', 'Replacement'
   ];
   const rows = [];
-  state.invoices.forEach(inv => {
+  invoices.forEach(inv => {
     inv.lines.forEach(L => {
       rows.push([
         inv.order_id, inv.date,
@@ -2504,7 +2884,11 @@ function exportInvoices() {
         ? `"${s.replace(/"/g, '""')}"` : s;
     }).join(','))
     .join('\n');
-  downloadFile(csv, `involens_invoices_${todayStr()}.csv`, 'text/csv');
+  downloadFile(csv, filename, 'text/csv');
+}
+
+function exportInvoices() {
+  exportInvoicesArray(state.invoices, `involens_invoices_${todayStr()}.csv`);
   toast('Invoices exported', 'success');
 }
 
@@ -3511,6 +3895,7 @@ async function confirmBulkImport() {
   let importedCount = 0;
   let updatedCount = 0;
   let skippedCount = 0;
+  const importedIds = [];
 
   for (const item of valid) {
     const p = item.parsed;
@@ -3595,6 +3980,7 @@ async function confirmBulkImport() {
         state.invoices.unshift(invoice);
         importedCount++;
       }
+      importedIds.push(id);
 
       // Upsert customer
       upsertCustomer(consignee);
@@ -3611,7 +3997,6 @@ async function confirmBulkImport() {
     pushToDrive('customers');
   }
 
-  document.getElementById('bulkImportPreview').classList.add('hidden');
   document.getElementById('bulkImportFile').value = '';
   _bulkParsedRows = null;
 
@@ -3624,6 +4009,35 @@ async function confirmBulkImport() {
   if (updatedCount > 0) summary += `, updated ${updatedCount}`;
   if (skippedCount > 0) summary += `, skipped ${skippedCount}`;
   toast(summary, 'success');
+
+  // Show print-all option in the preview panel
+  const previewEl = document.getElementById('bulkImportPreview');
+  previewEl.classList.remove('hidden');
+  previewEl.innerHTML = `
+    <div class="card" style="background: var(--success-soft); border: 1px solid var(--success); padding: 14px;">
+      <div class="row" style="justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="color: var(--success);">${summary}</strong>
+          <div class="text-muted" style="font-size: 12px; margin-top: 4px;">
+            Print all ${importedIds.length} as one combined PDF, or visit the History tab to manage them.
+          </div>
+        </div>
+        <div class="row" style="gap: 8px;">
+          <button class="btn btn-sm btn-primary" onclick="printImportedBatch(${JSON.stringify(importedIds).replace(/"/g, '&quot;')})">📄 Print All as PDF</button>
+          <button class="btn btn-sm" onclick="document.getElementById('bulkImportPreview').classList.add('hidden')">Dismiss</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function printImportedBatch(ids) {
+  const invoices = state.invoices.filter(inv => ids.includes(inv.id));
+  if (invoices.length === 0) {
+    toast('No invoices found to print', 'error');
+    return;
+  }
+  printMultipleInvoices(invoices);
 }
 
 function downloadBulkTemplate() {
