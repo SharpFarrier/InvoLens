@@ -2102,19 +2102,20 @@ function saveAndPrintInvoice() {
   upsertCustomer(consignee);
 
   saveState();
-  toast('Invoice saved locally', 'success');
 
   // Push to Drive if connected — with explicit success/failure feedback
   if (drive.accessToken) {
     Promise.all([pushToDrive('invoices'), pushToDrive('customers')])
-      .then(() => {
-        // pushToDrive handles its own toast for errors; success is silent
-      })
-      .catch(e => {
-        toast('⚠️ Saved locally but Drive push failed — click Sync now to retry', 'error');
+      .then(results => {
+        const allOk = results.every(r => r === true);
+        if (allOk) {
+          toast('✓ Invoice saved & synced to Drive', 'success');
+        } else {
+          toast('⚠️ Saved locally — Drive sync incomplete. Click "Sync now" to retry.', 'error');
+        }
       });
   } else {
-    toast('⚠️ Not connected to Drive — click Connect Drive to sync', 'error');
+    toast('⚠️ Saved locally — not connected to Drive', 'error');
   }
 
   // Print
@@ -2732,12 +2733,11 @@ async function bootstrapDriveSession(opts = {}) {
   const silent = !!opts.silent;
   try {
     if (!silent) updateSyncUI('connecting', 'Connecting to Drive...');
-    // Skip userinfo call — go straight to Drive ops to avoid scope issues
-    // Discover or create files (this is the real auth test)
+    // discoverFiles is the real auth test. If it 401s, token is dead.
     await discoverFiles();
     // Pull from Drive
     await pullAllFromDrive();
-    // Best-effort userinfo for display, not critical
+    // Best-effort userinfo for display, not critical — wrong scope just means no email shown
     try {
       const u = await driveFetch('https://www.googleapis.com/oauth2/v2/userinfo');
       if (u && u.email) {
@@ -2752,7 +2752,8 @@ async function bootstrapDriveSession(opts = {}) {
         }));
       }
     } catch (uiErr) {
-      // Userinfo failure is non-fatal — Drive itself works
+      // userinfo 401 = wrong scope (we asked for drive only), not a session problem.
+      // Drive itself works fine — keep going.
       console.warn('userinfo unavailable (non-fatal):', uiErr.message);
       drive.userEmail = drive.userEmail || 'Connected';
     }
@@ -2761,17 +2762,11 @@ async function bootstrapDriveSession(opts = {}) {
     updateSyncUI('connected');
     if (!silent) toast(`Connected${drive.userEmail && drive.userEmail !== 'Connected' ? ' as ' + drive.userEmail : ''}`, 'success');
   } catch (e) {
+    // Real failure — discoverFiles or pull failed. Token is bad.
     console.warn('Drive bootstrap failed:', e.message || e);
-    drive.accessToken = null;
-    drive.userEmail = null;
-    drive.fileIds = {};
-    sessionStorage.removeItem('involens_drive_token');
-    if (silent) {
-      // Silent failure — token was stale, just go back to disconnected without alarming the user
-      updateSyncUI('disconnected');
-    } else {
+    invalidateSession(e.message || 'bootstrap failed');
+    if (!silent) {
       drive.lastSyncError = e.message;
-      updateSyncUI('disconnected');
       toast('Drive connection failed: ' + e.message, 'error');
     }
   }
@@ -2844,19 +2839,32 @@ async function driveFetch(url, options = {}) {
   };
   const resp = await fetch(url, { ...options, headers });
   if (resp.status === 401) {
-    // Token expired
-    drive.accessToken = null;
-    sessionStorage.removeItem('involens_drive_token');
-    updateSyncUI('disconnected');
-    throw new Error('Session expired — please reconnect');
+    // Throw a typed error — DO NOT clear token here.
+    // Caller decides whether to invalidate session (e.g. discoverFiles 401 = bad token,
+    // userinfo 401 = scope issue, not a session problem).
+    const err = new Error('401 Unauthorized');
+    err.status = 401;
+    throw err;
   }
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Drive API ${resp.status}: ${text.slice(0, 200)}`);
+    const err = new Error(`Drive API ${resp.status}: ${text.slice(0, 200)}`);
+    err.status = resp.status;
+    throw err;
   }
   const ctype = resp.headers.get('content-type') || '';
   if (ctype.includes('application/json')) return resp.json();
   return resp.text();
+}
+
+// Helper: invalidate session — only call when we're sure the token is dead
+function invalidateSession(reason) {
+  console.warn('Invalidating Drive session:', reason);
+  drive.accessToken = null;
+  drive.userEmail = null;
+  drive.fileIds = {};
+  sessionStorage.removeItem('involens_drive_token');
+  updateSyncUI('disconnected');
 }
 
 async function discoverFiles() {
@@ -2952,17 +2960,25 @@ async function pullAllFromDrive() {
   }
 }
 
-// Push specific entity to Drive — with merge for invoices/customers (avoid clobbering concurrent writes)
+// Push specific entity to Drive. Returns true on success, false on failure.
+// Invalidates session only on genuine 401 (auth dead), not other errors.
 async function pushToDrive(kind) {
-  if (!drive.accessToken || !drive.fileIds[kind]) return;
+  if (!drive.accessToken || !drive.fileIds[kind]) return false;
   try {
     drive.syncing = true;
     updateSyncUI('syncing');
 
     if (kind === 'invoices' || kind === 'customers') {
       // Merge: fetch latest, merge with local, write back
-      const remote = await downloadDriveFile(drive.fileIds[kind]).catch(() => []);
-      const remoteArr = Array.isArray(remote) ? remote : [];
+      let remoteArr = [];
+      try {
+        const remote = await downloadDriveFile(drive.fileIds[kind]);
+        if (Array.isArray(remote)) remoteArr = remote;
+      } catch (downErr) {
+        if (downErr.status === 401) throw downErr;  // bubble up
+        // Other errors (404 etc) — just use local as the source of truth
+        console.warn(`Could not fetch remote ${kind}, pushing local:`, downErr.message);
+      }
       const merged = mergeById(remoteArr, state[kind]);
       state[kind] = merged;
       saveState();
@@ -2977,12 +2993,20 @@ async function pushToDrive(kind) {
     drive.lastSyncError = null;
     drive.syncing = false;
     updateSyncUI('connected');
+    return true;
   } catch (e) {
     drive.syncing = false;
     drive.lastSyncError = e.message;
-    updateSyncUI('error', e.message);
     console.error(`Push ${kind} failed:`, e);
-    toast(`Sync failed: ${e.message}`, 'error');
+    if (e.status === 401) {
+      // Real auth failure — token is dead
+      invalidateSession('push 401');
+      toast('Drive session expired — click Connect Drive to reconnect', 'error');
+    } else {
+      updateSyncUI('error', e.message);
+      toast(`Drive sync failed (${kind}): ${e.message}`, 'error');
+    }
+    return false;
   }
 }
 
