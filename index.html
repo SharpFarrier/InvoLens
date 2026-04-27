@@ -2640,7 +2640,9 @@ document.querySelectorAll('.tab').forEach(tab => {
 const DRIVE_CONFIG = {
   CLIENT_ID: '121246383704-abtnoebdjrg70tqr7bngjg1h7c212vv0.apps.googleusercontent.com',
   FOLDER_ID: '1v5oo7acB9o9JcbMSGkMrzXXsYMbh_XjP',
-  SCOPES: 'https://www.googleapis.com/auth/drive.file',
+  // Using 'drive' scope (not 'drive.file') so any operator can access the shared folder.
+  // 'drive.file' restricts to files the app itself created — breaks multi-user sharing.
+  SCOPES: 'https://www.googleapis.com/auth/drive',
   FILES: {
     settings:  'involens_settings.json',
     products:  'involens_products.json',
