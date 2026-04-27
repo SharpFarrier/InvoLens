@@ -2705,7 +2705,8 @@ function initGIS() {
     try {
       const parsed = JSON.parse(saved);
       if (parsed.exp && parsed.exp > Date.now() && parsed.token) {
-        // Token still valid — use it. Show a subtle confirmation after validation succeeds.
+        // Token still valid — show "Reconnecting..." immediately so user knows
+        updateSyncUI('connecting', 'Reconnecting...');
         drive.accessToken = parsed.token;
         drive.userEmail = parsed.email;
         bootstrapDriveSession({ silent: true }).then(() => {
@@ -2717,6 +2718,7 @@ function initGIS() {
       }
       // Token expired but we have a record of having connected before — try silent re-auth
       if (parsed.token) {
+        updateSyncUI('connecting', 'Reconnecting...');
         attemptSilentReauth();
         return;
       }
@@ -2730,16 +2732,31 @@ function initGIS() {
 function attemptSilentReauth() {
   if (!drive.tokenClient) return;
   drive._silentReauth = true;
+  updateSyncUI('connecting', 'Reconnecting...');
+  // Set a timeout so the user doesn't sit on "Reconnecting..." forever if Google never responds
+  drive._silentReauthTimer = setTimeout(() => {
+    if (drive._silentReauth) {
+      drive._silentReauth = false;
+      updateSyncUI('disconnected');
+      console.warn('Silent re-auth timed out — falling back to manual Connect');
+    }
+  }, 5000);
   try {
     drive.tokenClient.requestAccessToken({ prompt: 'none' });
   } catch (e) {
     console.warn('Silent re-auth failed:', e);
     drive._silentReauth = false;
+    clearTimeout(drive._silentReauthTimer);
     updateSyncUI('disconnected');
   }
 }
 
 function handleTokenResponse(resp) {
+  // Clear the silent re-auth timeout if it was running
+  if (drive._silentReauthTimer) {
+    clearTimeout(drive._silentReauthTimer);
+    drive._silentReauthTimer = null;
+  }
   if (resp.error) {
     drive.syncing = false;
     drive._silentReauth = false;
@@ -3097,17 +3114,27 @@ function updateSyncUI(status, message = '') {
       pill.className = 'auth-pill connected';
       pill.textContent = '✓ Drive synced';
       pill.title = drive.userEmail || '';
+      pill.style.background = '';
+      pill.style.color = '';
       connectBtn.style.display = 'none';
       disconnectBtn.style.display = 'inline-flex';
       syncBtn.style.display = 'inline-flex';
       break;
     case 'syncing':
       pill.className = 'auth-pill';
-      pill.textContent = 'Syncing...';
+      pill.style.background = 'var(--accent-soft)';
+      pill.style.color = 'var(--accent)';
+      pill.textContent = '⟳ Syncing…';
       break;
     case 'connecting':
       pill.className = 'auth-pill';
-      pill.textContent = message || 'Connecting...';
+      pill.style.background = 'var(--accent-soft)';
+      pill.style.color = 'var(--accent)';
+      pill.textContent = '⟳ ' + (message || 'Connecting…');
+      // Hide Connect button so user doesn't manually click it during auto-reconnect
+      connectBtn.style.display = 'none';
+      disconnectBtn.style.display = 'none';
+      syncBtn.style.display = 'none';
       break;
     case 'error':
       pill.className = 'auth-pill';
