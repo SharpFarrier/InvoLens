@@ -2685,6 +2685,12 @@ function initGIS() {
     error_callback: (err) => {
       console.error('OAuth error:', err);
       drive.syncing = false;
+      // Don't toast on silent re-auth failures — just fall back to disconnected state
+      if (drive._silentReauth) {
+        drive._silentReauth = false;
+        updateSyncUI('disconnected');
+        return;
+      }
       updateSyncUI('disconnected');
       if (err && err.type !== 'popup_closed') {
         toast('Sign-in failed: ' + (err.message || err.type || 'unknown'), 'error');
@@ -2693,40 +2699,70 @@ function initGIS() {
   });
   drive.ready = true;
 
-  // Check if previously connected — restore silently from session
-  const saved = sessionStorage.getItem('involens_drive_token');
+  // Check if previously connected — restore silently from local storage (persists across tab close)
+  const saved = localStorage.getItem('involens_drive_token');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
       if (parsed.exp && parsed.exp > Date.now() && parsed.token) {
+        // Token still valid — use it. Show a subtle confirmation after validation succeeds.
         drive.accessToken = parsed.token;
         drive.userEmail = parsed.email;
-        // Validate token silently — if it fails, drop to Local mode without noise
-        bootstrapDriveSession({ silent: true });
+        bootstrapDriveSession({ silent: true }).then(() => {
+          if (drive.accessToken) {
+            toast('✓ Drive connected', 'success');
+          }
+        });
+        return;
+      }
+      // Token expired but we have a record of having connected before — try silent re-auth
+      if (parsed.token) {
+        attemptSilentReauth();
         return;
       }
     } catch {}
-    // Bad/expired cache — clear it
-    sessionStorage.removeItem('involens_drive_token');
+    localStorage.removeItem('involens_drive_token');
+  }
+}
+
+// Silent re-auth: tries to refresh token without UI. Only works if user previously consented
+// AND is currently signed in to a Google account in the browser. Falls back gracefully.
+function attemptSilentReauth() {
+  if (!drive.tokenClient) return;
+  drive._silentReauth = true;
+  try {
+    drive.tokenClient.requestAccessToken({ prompt: 'none' });
+  } catch (e) {
+    console.warn('Silent re-auth failed:', e);
+    drive._silentReauth = false;
+    updateSyncUI('disconnected');
   }
 }
 
 function handleTokenResponse(resp) {
   if (resp.error) {
     drive.syncing = false;
+    drive._silentReauth = false;
     updateSyncUI('disconnected');
-    toast('Sign-in failed: ' + resp.error, 'error');
+    if (!drive._silentReauth) toast('Sign-in failed: ' + resp.error, 'error');
     return;
   }
   drive.accessToken = resp.access_token;
   // Token expires in resp.expires_in seconds — store with buffer
   const expMs = Date.now() + (parseInt(resp.expires_in || 3500) - 60) * 1000;
-  sessionStorage.setItem('involens_drive_token', JSON.stringify({
+  localStorage.setItem('involens_drive_token', JSON.stringify({
     token: drive.accessToken,
     exp: expMs,
     email: drive.userEmail,
   }));
-  bootstrapDriveSession({ silent: false });
+  // If this was a silent re-auth, show a small confirmation but not full UI flash
+  const wasSilent = drive._silentReauth;
+  drive._silentReauth = false;
+  bootstrapDriveSession({ silent: wasSilent }).then(() => {
+    if (wasSilent && drive.accessToken) {
+      toast('✓ Reconnected to Drive', 'success');
+    }
+  });
 }
 
 async function bootstrapDriveSession(opts = {}) {
@@ -2743,9 +2779,9 @@ async function bootstrapDriveSession(opts = {}) {
       if (u && u.email) {
         drive.userEmail = u.email;
         const existingExp = (() => {
-          try { return JSON.parse(sessionStorage.getItem('involens_drive_token') || '{}').exp; } catch { return null; }
+          try { return JSON.parse(localStorage.getItem('involens_drive_token') || '{}').exp; } catch { return null; }
         })();
-        sessionStorage.setItem('involens_drive_token', JSON.stringify({
+        localStorage.setItem('involens_drive_token', JSON.stringify({
           token: drive.accessToken,
           exp: existingExp || (Date.now() + 3500000),
           email: u.email,
@@ -2788,14 +2824,26 @@ function disconnectDrive() {
   drive.accessToken = null;
   drive.fileIds = {};
   drive.userEmail = null;
-  sessionStorage.removeItem('involens_drive_token');
+  localStorage.removeItem('involens_drive_token');
   updateSyncUI('disconnected');
   toast('Disconnected from Drive', 'success');
 }
 
 async function syncNow() {
   if (!drive.accessToken) {
-    toast('Not connected to Drive', 'error');
+    // Try silent re-auth before giving up
+    const saved = localStorage.getItem('involens_drive_token');
+    if (saved && drive.tokenClient) {
+      toast('Reconnecting to Drive...', '');
+      attemptSilentReauth();
+      // Wait briefly for the token; if it succeeds, retry the sync
+      setTimeout(() => {
+        if (drive.accessToken) syncNow();
+        else toast('Not connected to Drive — click Connect Drive', 'error');
+      }, 1500);
+      return;
+    }
+    toast('Not connected to Drive — click Connect Drive', 'error');
     return;
   }
   try {
@@ -2863,7 +2911,7 @@ function invalidateSession(reason) {
   drive.accessToken = null;
   drive.userEmail = null;
   drive.fileIds = {};
-  sessionStorage.removeItem('involens_drive_token');
+  localStorage.removeItem('involens_drive_token');
   updateSyncUI('disconnected');
 }
 
