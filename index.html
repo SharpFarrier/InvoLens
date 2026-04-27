@@ -2674,30 +2674,37 @@ function initGIS() {
     error_callback: (err) => {
       console.error('OAuth error:', err);
       drive.syncing = false;
-      updateSyncUI('error', err.message || 'Sign-in cancelled');
+      updateSyncUI('disconnected');
+      if (err && err.type !== 'popup_closed') {
+        toast('Sign-in failed: ' + (err.message || err.type || 'unknown'), 'error');
+      }
     },
   });
   drive.ready = true;
 
-  // Check if previously connected — restore from session
+  // Check if previously connected — restore silently from session
   const saved = sessionStorage.getItem('involens_drive_token');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      if (parsed.exp && parsed.exp > Date.now()) {
+      if (parsed.exp && parsed.exp > Date.now() && parsed.token) {
         drive.accessToken = parsed.token;
         drive.userEmail = parsed.email;
-        // Validate token by attempting a sync
-        bootstrapDriveSession();
+        // Validate token silently — if it fails, drop to Local mode without noise
+        bootstrapDriveSession({ silent: true });
+        return;
       }
     } catch {}
+    // Bad/expired cache — clear it
+    sessionStorage.removeItem('involens_drive_token');
   }
 }
 
 function handleTokenResponse(resp) {
   if (resp.error) {
     drive.syncing = false;
-    updateSyncUI('error', resp.error);
+    updateSyncUI('disconnected');
+    toast('Sign-in failed: ' + resp.error, 'error');
     return;
   }
   drive.accessToken = resp.access_token;
@@ -2708,18 +2715,22 @@ function handleTokenResponse(resp) {
     exp: expMs,
     email: drive.userEmail,
   }));
-  bootstrapDriveSession();
+  bootstrapDriveSession({ silent: false });
 }
 
-async function bootstrapDriveSession() {
+async function bootstrapDriveSession(opts = {}) {
+  const silent = !!opts.silent;
   try {
-    updateSyncUI('connecting', 'Connecting to Drive...');
+    if (!silent) updateSyncUI('connecting', 'Connecting to Drive...');
     // Get user email
     const u = await driveFetch('https://www.googleapis.com/oauth2/v2/userinfo');
     drive.userEmail = u.email;
+    const existingExp = (() => {
+      try { return JSON.parse(sessionStorage.getItem('involens_drive_token') || '{}').exp; } catch { return null; }
+    })();
     sessionStorage.setItem('involens_drive_token', JSON.stringify({
       token: drive.accessToken,
-      exp: JSON.parse(sessionStorage.getItem('involens_drive_token') || '{}').exp || (Date.now() + 3500000),
+      exp: existingExp || (Date.now() + 3500000),
       email: u.email,
     }));
     // Discover or create files
@@ -2729,12 +2740,21 @@ async function bootstrapDriveSession() {
     drive.lastSync = new Date();
     drive.lastSyncError = null;
     updateSyncUI('connected');
-    toast(`Connected as ${drive.userEmail}`, 'success');
+    if (!silent) toast(`Connected as ${drive.userEmail}`, 'success');
   } catch (e) {
-    console.error('Drive bootstrap failed:', e);
-    drive.lastSyncError = e.message;
-    updateSyncUI('error', e.message);
-    toast('Drive connection failed: ' + e.message, 'error');
+    console.warn('Drive bootstrap failed:', e.message || e);
+    drive.accessToken = null;
+    drive.userEmail = null;
+    drive.fileIds = {};
+    sessionStorage.removeItem('involens_drive_token');
+    if (silent) {
+      // Silent failure — token was stale, just go back to disconnected without alarming the user
+      updateSyncUI('disconnected');
+    } else {
+      drive.lastSyncError = e.message;
+      updateSyncUI('disconnected');
+      toast('Drive connection failed: ' + e.message, 'error');
+    }
   }
 }
 
