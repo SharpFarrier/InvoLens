@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>InvoLens — Sabi Wabi Innovations LLP</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #fafaf9;
@@ -1025,10 +1026,25 @@
       </div>
     </div>
 
+    <!-- Bulk import -->
+    <div class="card">
+      <h3 class="card-title">Bulk Import Invoices</h3>
+      <p class="card-sub">Upload an Excel/CSV of past invoices. GST split (IGST vs CGST/SGST) re-derived from State.</p>
+      <div class="row" style="gap: 8px; align-items: center; flex-wrap: wrap;">
+        <input type="file" id="bulkImportFile" accept=".csv,.xlsx,.xls" style="max-width: 320px;" onchange="handleBulkImport(event)">
+        <button class="btn btn-sm" onclick="downloadBulkTemplate()">Download Template</button>
+      </div>
+      <div class="help" style="margin-top: 8px;">
+        Required columns: Order No, Invoice Date, Consignee, Address, Contact, SKU, Qty, Unit Price, Taxable, Tax, State, AWB.<br>
+        Optional: Shipping, Discount %, IGST/SGST/CGST (will be recalculated). Column names are matched flexibly.
+      </div>
+      <div id="bulkImportPreview" class="hidden" style="margin-top: 16px;"></div>
+    </div>
+
     <!-- Data management -->
     <div class="card">
       <h3 class="card-title">Data Management</h3>
-      <p class="card-sub">All data lives in browser storage. Drive sync coming next round.</p>
+      <p class="card-sub">All data lives in browser storage and syncs to Drive when connected.</p>
       <div class="row" style="gap: 8px;">
         <button class="btn btn-sm" onclick="exportAllData()">Export All Data (JSON)</button>
         <button class="btn btn-sm" onclick="importAllData()">Import Data</button>
@@ -3213,6 +3229,425 @@ function pushSettings() { saveState('settings'); }
 function pushProducts() { saveState('products'); }
 function pushCustomers() { saveState('customers'); }
 function pushInvoices() { saveState('invoices'); }
+
+
+// ============================================================
+// BULK INVOICE IMPORT
+// ============================================================
+
+// State name → state code mapping (case-insensitive)
+function lookupStateCode(stateText) {
+  if (!stateText) return '';
+  const norm = stateText.toString().trim().toUpperCase();
+  // Direct code match
+  const byCode = INDIAN_STATES.find(s => s[0] === norm);
+  if (byCode) return byCode[0];
+  // Name match
+  const byName = INDIAN_STATES.find(s => s[1].toUpperCase() === norm);
+  if (byName) return byName[0];
+  // Fuzzy: contains
+  const byContains = INDIAN_STATES.find(s => norm.includes(s[1].toUpperCase()) || s[1].toUpperCase().includes(norm));
+  if (byContains) return byContains[0];
+  return '';
+}
+
+// Normalize a column name for flexible matching
+function normalizeKey(k) {
+  if (k == null) return '';
+  return String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Find column value in a row using flexible key matching
+function findCol(row, keys) {
+  const map = {};
+  for (const k of Object.keys(row)) map[normalizeKey(k)] = k;
+  for (const candidate of keys) {
+    const norm = normalizeKey(candidate);
+    if (map[norm] !== undefined) {
+      const val = row[map[norm]];
+      if (val !== null && val !== undefined && val !== '') return val;
+    }
+  }
+  return null;
+}
+
+// Extract pincode (last 6-digit number) from address
+function extractPincode(address) {
+  if (!address) return '';
+  const matches = String(address).match(/\b(\d{6})\b/g);
+  return matches ? matches[matches.length - 1] : '';
+}
+
+// Format date from various inputs (Date object, Excel serial, string)
+function normalizeDate(v) {
+  if (!v) return '';
+  if (v instanceof Date) {
+    return v.toISOString().slice(0, 10);
+  }
+  if (typeof v === 'number') {
+    // Excel serial date
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const ms = v * 86400000;
+    return new Date(excelEpoch.getTime() + ms).toISOString().slice(0, 10);
+  }
+  const s = String(v).trim();
+  // Try DD-MM-YYYY or DD/MM/YYYY
+  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (dmy) {
+    let [, d, m, y] = dmy;
+    if (y.length === 2) y = (parseInt(y) > 50 ? '19' : '20') + y;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // Try YYYY-MM-DD
+  const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymd) {
+    const [, y, m, d] = ymd;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // Fallback: try Date.parse
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return s;
+}
+
+// Parse a single row from the bulk file into a normalized record
+function parseBulkRow(row, idx) {
+  const errors = [];
+  const orderNo = findCol(row, ['Order No', 'Order ID', 'Order Number', 'Invoice No', 'Order']);
+  if (!orderNo) errors.push('Missing Order No');
+
+  const date = normalizeDate(findCol(row, ['Invoice Date', 'Date', 'Order Date']));
+  const consignee = findCol(row, ['Consignee', 'Customer', 'Customer Name', 'Buyer Name', 'Name']);
+  if (!consignee) errors.push('Missing Consignee');
+  const address = findCol(row, ['Address', 'Shipping Address', 'Delivery Address']);
+  if (!address) errors.push('Missing Address');
+  const contact = findCol(row, ['Contact', 'Phone', 'Mobile', 'Phone Number']);
+  const stateText = findCol(row, ['State', 'Buyer State', 'Shipping State']);
+  const stateCode = lookupStateCode(stateText);
+  if (!stateCode) errors.push(`Unrecognized state: "${stateText || ''}"`);
+
+  const sku = findCol(row, ['SKU', 'Master SKU', 'Amazon SKU', 'Product SKU']);
+  if (!sku) errors.push('Missing SKU');
+  const qty = parseFloat(findCol(row, ['Qty', 'Quantity'])) || 1;
+  const unitPrice = parseFloat(findCol(row, ['Unit Price', 'MRP', 'Price'])) || 0;
+
+  const taxable = parseFloat(findCol(row, ['Taxable', 'Taxable Value', 'Net Amount'])) || 0;
+  const tax = parseFloat(findCol(row, ['Tax', 'GST'])) || 0;
+  const shipping = parseFloat(findCol(row, ['Shipping', 'Shipping Charge'])) || 0;
+  // Total tax includes both product tax and shipping tax (if present in file)
+  const taxTotal = parseFloat(findCol(row, ['Tax.2', 'Total Tax', 'Tax Total'])) || tax;
+  const shipTaxable = parseFloat(findCol(row, ['Taxable.1', 'Shipping Taxable'])) || 0;
+  const shipTax = parseFloat(findCol(row, ['Tax.1', 'Shipping Tax'])) || 0;
+
+  const awb = findCol(row, ['AWB', 'Tracking ID', 'Tracking', 'AWB Number']);
+  const discountPct = parseFloat(findCol(row, ['Discount Percentage', 'Discount %', 'Discount'])) || 0;
+  const productNameFromFile = findCol(row, ['Product Name', 'Product', 'Item Name', 'Description']) || '';
+
+  // Compute total taxable (product + shipping if separate)
+  const totalTaxable = round2(taxable + shipTaxable);
+  const totalTax = round2(taxTotal || (tax + shipTax));
+  // Grand total = taxable + tax + (shipping pre-tax portion, since shipping was split into taxable+tax)
+  // If shipTaxable + shipTax > 0, those are already included in totalTaxable + totalTax
+  // Otherwise add raw shipping if it exists
+  let grandTotal;
+  if (shipTaxable > 0 || shipTax > 0) {
+    grandTotal = round2(totalTaxable + totalTax);
+  } else if (shipping > 0) {
+    grandTotal = round2(taxable + tax + shipping);
+  } else {
+    grandTotal = round2(taxable + tax);
+  }
+
+  return {
+    rowNum: idx + 1,
+    errors,
+    parsed: {
+      order_no: orderNo ? String(orderNo).trim() : '',
+      date,
+      consignee: consignee ? String(consignee).trim() : '',
+      address: address ? String(address).trim() : '',
+      contact: contact ? String(contact).trim() : '',
+      state: stateCode,
+      stateText: stateText || '',
+      pincode: extractPincode(address),
+      sku: sku ? String(sku).trim() : '',
+      product_name: productNameFromFile.trim(),
+      qty,
+      unit_price: unitPrice,
+      taxable: totalTaxable,
+      tax: totalTax,
+      shipping,
+      grand_total: grandTotal,
+      discount_pct: discountPct,
+      awb: awb ? String(awb).trim() : '',
+    }
+  };
+}
+
+// File handler — reads CSV or XLSX into rows
+function readBulkFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = ev.target.result;
+        let workbook;
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          workbook = XLSX.read(data, { type: 'string' });
+        } else {
+          workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        }
+        // Use first sheet, or "Data" sheet if it exists
+        let sheetName = workbook.SheetNames[0];
+        if (workbook.SheetNames.includes('Data')) sheetName = 'Data';
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+        resolve(rows);
+      } catch (e) {
+        reject(e);
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    if (file.name.toLowerCase().endsWith('.csv')) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+  });
+}
+
+let _bulkParsedRows = null;
+
+async function handleBulkImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const previewEl = document.getElementById('bulkImportPreview');
+  previewEl.classList.remove('hidden');
+  previewEl.innerHTML = '<div class="text-muted">Reading file…</div>';
+
+  try {
+    const rows = await readBulkFile(file);
+    if (!rows || rows.length === 0) {
+      previewEl.innerHTML = '<div style="color: var(--danger);">No rows found in file.</div>';
+      return;
+    }
+
+    const parsed = rows.map((r, i) => parseBulkRow(r, i));
+    _bulkParsedRows = parsed;
+
+    const valid = parsed.filter(p => p.errors.length === 0);
+    const invalid = parsed.filter(p => p.errors.length > 0);
+
+    // Preview top 5
+    const previewRows = parsed.slice(0, 5).map(p => `
+      <tr>
+        <td>${p.rowNum}</td>
+        <td class="mono">${escapeHtml(p.parsed.order_no || '—')}</td>
+        <td>${escapeHtml(p.parsed.consignee || '—')}</td>
+        <td>${escapeHtml(stateName(p.parsed.state) || p.parsed.stateText || '—')}</td>
+        <td class="mono">${escapeHtml(p.parsed.sku || '—')}</td>
+        <td class="mono">${fmtCurrency(p.parsed.grand_total)}</td>
+        <td>${p.errors.length === 0 ? '<span class="pill success">OK</span>' : `<span class="pill" style="background: var(--danger-soft); color: var(--danger);">${p.errors.length} err</span>`}</td>
+      </tr>
+    `).join('');
+
+    const errorList = invalid.length > 0 ? `
+      <details style="margin-top: 12px;">
+        <summary style="cursor: pointer; color: var(--danger); font-size: 12px;">${invalid.length} rows with errors — click to expand</summary>
+        <div style="max-height: 200px; overflow-y: auto; margin-top: 8px; font-size: 12px;">
+          ${invalid.map(p => `<div>Row ${p.rowNum}: ${p.errors.join(', ')}</div>`).join('')}
+        </div>
+      </details>
+    ` : '';
+
+    previewEl.innerHTML = `
+      <div class="card" style="background: var(--surface-2); padding: 14px;">
+        <div class="row" style="justify-content: space-between; margin-bottom: 12px;">
+          <div>
+            <strong>${rows.length}</strong> rows in file ·
+            <span style="color: var(--success);">${valid.length} ready</span>
+            ${invalid.length > 0 ? `· <span style="color: var(--danger);">${invalid.length} with errors</span>` : ''}
+          </div>
+          <div class="row" style="gap: 8px;">
+            <button class="btn btn-sm" onclick="cancelBulkImport()">Cancel</button>
+            <button class="btn btn-sm btn-primary" onclick="confirmBulkImport()" ${valid.length === 0 ? 'disabled' : ''}>Import ${valid.length} Invoices</button>
+          </div>
+        </div>
+        <div class="table-wrap" style="max-height: 280px; overflow: auto;">
+          <table class="data-table">
+            <thead><tr>
+              <th>#</th><th>Order No</th><th>Consignee</th><th>State</th><th>SKU</th><th>Total</th><th>Status</th>
+            </tr></thead>
+            <tbody>${previewRows}</tbody>
+          </table>
+        </div>
+        ${errorList}
+        <div class="help" style="margin-top: 8px;">
+          ${rows.length > 5 ? `Preview shows first 5 rows. ` : ''}Click "Import" to add all valid rows. Errors will be skipped.
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    previewEl.innerHTML = `<div style="color: var(--danger);">Failed to parse file: ${escapeHtml(e.message)}</div>`;
+    console.error('Bulk import parse error:', e);
+  }
+}
+
+function cancelBulkImport() {
+  _bulkParsedRows = null;
+  document.getElementById('bulkImportPreview').classList.add('hidden');
+  document.getElementById('bulkImportFile').value = '';
+}
+
+async function confirmBulkImport() {
+  if (!_bulkParsedRows) return;
+  const valid = _bulkParsedRows.filter(p => p.errors.length === 0);
+  if (valid.length === 0) {
+    toast('No valid rows to import', 'error');
+    return;
+  }
+  if (!confirm(`Import ${valid.length} invoices? Existing invoices with the same Order No will be updated.`)) return;
+
+  let importedCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+
+  for (const item of valid) {
+    const p = item.parsed;
+    try {
+      // Resolve product
+      let product = resolveProductBySKU(p.sku);
+      let productName, hsn, gstRate;
+      if (product) {
+        const hg = getHsnAndGstForProduct(product);
+        productName = (product.product_family || '') + ' — ' + (product.product_description || '');
+        hsn = hg.hsn;
+        gstRate = hg.gst;
+      } else {
+        // Unknown SKU — use placeholder defaults from settings (option B)
+        productName = p.product_name || `Unknown SKU: ${p.sku}`;
+        hsn = state.settings.default_hsn;
+        gstRate = state.settings.default_gst;
+      }
+
+      // Re-derive GST split from State (rule b)
+      const isInter = p.state && p.state !== state.settings.state;
+      const igst = isInter ? p.tax : 0;
+      const cgst = isInter ? 0 : round2(p.tax / 2);
+      const sgst = isInter ? 0 : round2(p.tax - cgst);
+
+      // Find existing by order_no, or create new
+      const existingIdx = state.invoices.findIndex(inv => inv.order_id === p.order_no);
+      const isUpdate = existingIdx >= 0;
+      const id = isUpdate ? state.invoices[existingIdx].id : ('inv_imp_' + Date.now() + '_' + Math.floor(Math.random() * 10000));
+
+      const consignee = {
+        name: p.consignee,
+        address: p.address,
+        state: p.state,
+        pincode: p.pincode,
+        contact: p.contact,
+        email: '',
+        gstin: '',
+      };
+
+      const lineItems = [{
+        sr: 1,
+        sku: p.sku,
+        product_name: productName,
+        master_sku: product?.master_sku || '',
+        hsn,
+        gst_rate: gstRate,
+        qty: p.qty,
+        unit_inclusive: p.qty > 0 ? round2(p.grand_total / p.qty) : p.grand_total,
+        unit_taxable: p.qty > 0 ? round2(p.taxable / p.qty) : p.taxable,
+        total_inclusive: p.grand_total,
+        taxable: p.taxable,
+        gst_amount: p.tax,
+        discount_pct: p.discount_pct,
+      }];
+
+      const invoice = {
+        id,
+        order_id: p.order_no,
+        date: p.date,
+        awb: p.awb,
+        is_replacement: false,
+        consignee,
+        seller_snapshot: { ...state.settings },
+        lines: lineItems,
+        totals: {
+          taxable: p.taxable,
+          gst: p.tax,
+          igst, cgst, sgst,
+          grand_total: p.grand_total,
+          is_inter_state: isInter,
+        },
+        created_at: isUpdate ? (state.invoices[existingIdx].created_at || new Date().toISOString()) : new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        imported: true,
+      };
+
+      if (isUpdate) {
+        state.invoices[existingIdx] = invoice;
+        updatedCount++;
+      } else {
+        state.invoices.unshift(invoice);
+        importedCount++;
+      }
+
+      // Upsert customer
+      upsertCustomer(consignee);
+    } catch (e) {
+      console.error(`Row ${item.rowNum} import failed:`, e);
+      skippedCount++;
+    }
+  }
+
+  saveState();
+  // Push to Drive
+  if (drive.accessToken) {
+    pushToDrive('invoices');
+    pushToDrive('customers');
+  }
+
+  document.getElementById('bulkImportPreview').classList.add('hidden');
+  document.getElementById('bulkImportFile').value = '';
+  _bulkParsedRows = null;
+
+  // Re-render
+  document.getElementById('historyFilterMonth').innerHTML = '<option value="">All months</option>';
+  renderHistory();
+  renderCustomers();
+
+  let summary = `✓ Imported ${importedCount} new invoices`;
+  if (updatedCount > 0) summary += `, updated ${updatedCount}`;
+  if (skippedCount > 0) summary += `, skipped ${skippedCount}`;
+  toast(summary, 'success');
+}
+
+function downloadBulkTemplate() {
+  const headers = [
+    'Order No', 'Invoice Date', 'Consignee', 'Address', 'Contact',
+    'SKU', 'Product Name', 'Qty', 'Unit Price', 'Discount Percentage',
+    'Taxable', 'Tax', 'Shipping', 'Taxable.1', 'Tax.1', 'Tax.2',
+    'IGST', 'SGST', 'CGST', 'State', 'AWB'
+  ];
+  const sample = [
+    '402-7796310-8585127', '2025-11-30', 'Durga Balachandar',
+    '#32, 4th Cross Road, Dollar Town Layout, BENGALURU KARNATAKA 560100',
+    '8695336120', 'HT-KBM-EL-6x6', 'Honey Touch Nova King Size Bed', 1, 11699, 0,
+    9914.41, 1784.59, '', '', '', 1784.59, 1784.59, '', '', 'KARNATAKA', '20894533765991'
+  ];
+  const csv = [headers, sample]
+    .map(row => row.map(cell => {
+      const s = String(cell ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(','))
+    .join('\n');
+  downloadFile(csv, 'involens_bulk_import_template.csv', 'text/csv');
+}
 
 
 // ============================================================
