@@ -2722,25 +2722,34 @@ async function bootstrapDriveSession(opts = {}) {
   const silent = !!opts.silent;
   try {
     if (!silent) updateSyncUI('connecting', 'Connecting to Drive...');
-    // Get user email
-    const u = await driveFetch('https://www.googleapis.com/oauth2/v2/userinfo');
-    drive.userEmail = u.email;
-    const existingExp = (() => {
-      try { return JSON.parse(sessionStorage.getItem('involens_drive_token') || '{}').exp; } catch { return null; }
-    })();
-    sessionStorage.setItem('involens_drive_token', JSON.stringify({
-      token: drive.accessToken,
-      exp: existingExp || (Date.now() + 3500000),
-      email: u.email,
-    }));
-    // Discover or create files
+    // Skip userinfo call — go straight to Drive ops to avoid scope issues
+    // Discover or create files (this is the real auth test)
     await discoverFiles();
     // Pull from Drive
     await pullAllFromDrive();
+    // Best-effort userinfo for display, not critical
+    try {
+      const u = await driveFetch('https://www.googleapis.com/oauth2/v2/userinfo');
+      if (u && u.email) {
+        drive.userEmail = u.email;
+        const existingExp = (() => {
+          try { return JSON.parse(sessionStorage.getItem('involens_drive_token') || '{}').exp; } catch { return null; }
+        })();
+        sessionStorage.setItem('involens_drive_token', JSON.stringify({
+          token: drive.accessToken,
+          exp: existingExp || (Date.now() + 3500000),
+          email: u.email,
+        }));
+      }
+    } catch (uiErr) {
+      // Userinfo failure is non-fatal — Drive itself works
+      console.warn('userinfo unavailable (non-fatal):', uiErr.message);
+      drive.userEmail = drive.userEmail || 'Connected';
+    }
     drive.lastSync = new Date();
     drive.lastSyncError = null;
     updateSyncUI('connected');
-    if (!silent) toast(`Connected as ${drive.userEmail}`, 'success');
+    if (!silent) toast(`Connected${drive.userEmail && drive.userEmail !== 'Connected' ? ' as ' + drive.userEmail : ''}`, 'success');
   } catch (e) {
     console.warn('Drive bootstrap failed:', e.message || e);
     drive.accessToken = null;
