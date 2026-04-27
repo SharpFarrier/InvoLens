@@ -966,10 +966,6 @@
         <div class="stat-value" id="stat_inv_month">—</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Total Value</div>
-        <div class="stat-value" id="stat_inv_value">—</div>
-      </div>
-      <div class="stat-card">
         <div class="stat-label">Replacements</div>
         <div class="stat-value" id="stat_inv_repl">—</div>
       </div>
@@ -2695,8 +2691,6 @@ function renderHistory() {
   const thisMonth = todayStr().slice(0, 7);
   document.getElementById('stat_inv_total').textContent = state.invoices.length;
   document.getElementById('stat_inv_month').textContent = state.invoices.filter(i => (i.date || '').slice(0, 7) === thisMonth).length;
-  const totalValue = state.invoices.filter(i => !i.is_replacement).reduce((s, i) => s + (i.totals?.grand_total || 0), 0);
-  document.getElementById('stat_inv_value').textContent = fmtCurrency(totalValue);
   document.getElementById('stat_inv_repl').textContent = state.invoices.filter(i => i.is_replacement).length;
 
   // Filter
