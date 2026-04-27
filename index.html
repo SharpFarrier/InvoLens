@@ -2102,12 +2102,20 @@ function saveAndPrintInvoice() {
   upsertCustomer(consignee);
 
   saveState();
-  // Push both kinds (debounced inside)
+  toast('Invoice saved locally', 'success');
+
+  // Push to Drive if connected — with explicit success/failure feedback
   if (drive.accessToken) {
-    saveState('invoices');
-    saveState('customers');
+    Promise.all([pushToDrive('invoices'), pushToDrive('customers')])
+      .then(() => {
+        // pushToDrive handles its own toast for errors; success is silent
+      })
+      .catch(e => {
+        toast('⚠️ Saved locally but Drive push failed — click Sync now to retry', 'error');
+      });
+  } else {
+    toast('⚠️ Not connected to Drive — click Connect Drive to sync', 'error');
   }
-  toast('Invoice saved', 'success');
 
   // Print
   setTimeout(() => printInvoice(invoice), 200);
@@ -2790,11 +2798,32 @@ function disconnectDrive() {
   toast('Disconnected from Drive', 'success');
 }
 
-function syncNow() {
+async function syncNow() {
   if (!drive.accessToken) {
     toast('Not connected to Drive', 'error');
     return;
   }
+  try {
+    updateSyncUI('syncing');
+    // Push local invoices and customers FIRST (in case of pending unsynced changes)
+    await pushToDrive('invoices');
+    await pushToDrive('customers');
+    await pushToDrive('settings');
+    await pushToDrive('products');
+    // Then pull merged state back
+    await pullAllFromDrive();
+    drive.lastSync = new Date();
+    updateSyncUI('connected');
+    toast('Synced — local + Drive merged', 'success');
+  } catch (e) {
+    drive.lastSyncError = e.message;
+    updateSyncUI('error', e.message);
+    toast('Sync failed: ' + e.message, 'error');
+  }
+}
+
+function _legacy_syncNow_pull_only() {
+  // (kept for reference — replaced above)
   pullAllFromDrive().then(() => {
     drive.lastSync = new Date();
     updateSyncUI('connected');
