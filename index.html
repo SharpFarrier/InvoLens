@@ -791,6 +791,16 @@
   </div>
 </div>
 
+<!-- DRIVE-REQUIRED BANNER (visible only when not connected) -->
+<div id="driveRequiredBanner" style="background: #fef3c7; border-bottom: 2px solid #b45309; padding: 14px 24px; display: none; align-items: center; gap: 14px; justify-content: center;">
+  <span style="font-size: 18px;">🔒</span>
+  <div style="font-size: 13px;">
+    <strong style="color: #92400e;">Drive sync required</strong>
+    <span style="color: #92400e;"> — connect to Google Drive to create, edit, or print invoices. This ensures every invoice is saved and visible to your team.</span>
+  </div>
+  <button class="btn btn-sm btn-primary" onclick="connectDrive()" style="margin-left: 8px;">Connect Drive</button>
+</div>
+
 <!-- TABS -->
 <div class="tabs">
   <button class="tab active" data-tab="invoice">New Invoice</button>
@@ -1759,6 +1769,7 @@ function updateProductField(idx, field, value) {
 }
 
 function deleteProduct(idx) {
+  if (!requireDrive()) return;
   if (!confirm(`Delete this product? (${state.products[idx].master_sku || state.products[idx].amazon_sku})`)) return;
   state.products.splice(idx, 1);
   saveState('products');
@@ -1779,6 +1790,7 @@ function closeAddProduct() {
   document.getElementById('addProductModal').classList.add('hidden');
 }
 function saveNewProduct() {
+  if (!requireDrive()) return;
   const masterSku = document.getElementById('np_master_sku').value.trim();
   if (!masterSku) {
     toast('Master SKU is required', 'error');
@@ -2314,6 +2326,7 @@ function validateInvoice() {
 }
 
 function saveAndPrintInvoice() {
+  if (!requireDrive()) return;
   const errors = validateInvoice();
   if (errors.length > 0) {
     toast(errors[0], 'error');
@@ -2393,23 +2406,40 @@ function saveAndPrintInvoice() {
 
   saveState();
 
-  // Push to Drive if connected — with explicit success/failure feedback
-  if (drive.accessToken) {
-    Promise.all([pushToDrive('invoices'), pushToDrive('customers')])
-      .then(results => {
-        const allOk = results.every(r => r === true);
-        if (allOk) {
-          toast('✓ Invoice saved & synced to Drive', 'success');
+  // Drive must be connected (guarded at function entry). Sync first, print only on success.
+  Promise.all([pushToDrive('invoices'), pushToDrive('customers')])
+    .then(results => {
+      const allOk = results.every(r => r === true);
+      if (allOk) {
+        toast('✓ Invoice saved & synced to Drive', 'success');
+        // Print only after successful sync
+        setTimeout(() => printInvoice(invoice), 200);
+      } else {
+        // Sync failed — roll back the local save so this invoice doesn't ghost into history
+        if (currentInvoice) {
+          // We were editing — restore original
+          const idx = state.invoices.findIndex(x => x.id === currentInvoice.id);
+          if (idx >= 0) state.invoices[idx] = currentInvoice;
         } else {
-          toast('⚠️ Saved locally — Drive sync incomplete. Click "Sync now" to retry.', 'error');
+          state.invoices = state.invoices.filter(x => x.id !== invoice.id);
         }
-      });
-  } else {
-    toast('⚠️ Saved locally — not connected to Drive', 'error');
-  }
-
-  // Print
-  setTimeout(() => printInvoice(invoice), 200);
+        saveState();
+        renderHistory();
+        toast('❌ Drive sync failed — invoice NOT saved. Reconnect and try again.', 'error');
+      }
+    })
+    .catch(e => {
+      // Same rollback on hard error
+      if (currentInvoice) {
+        const idx = state.invoices.findIndex(x => x.id === currentInvoice.id);
+        if (idx >= 0) state.invoices[idx] = currentInvoice;
+      } else {
+        state.invoices = state.invoices.filter(x => x.id !== invoice.id);
+      }
+      saveState();
+      renderHistory();
+      toast('❌ Drive sync failed — invoice NOT saved: ' + (e.message || e), 'error');
+    });
 }
 
 function upsertCustomer(consignee) {
@@ -2461,6 +2491,7 @@ function resetInvoiceForm() {
 }
 
 function loadInvoiceForEdit(id) {
+  if (!requireDrive()) return;
   const inv = state.invoices.find(x => x.id === id);
   if (!inv) return;
   currentInvoice = inv;
@@ -2833,6 +2864,7 @@ function bulkExportSelectedCSV() {
 }
 
 function bulkDeleteSelected() {
+  if (!requireDrive()) return;
   const ids = [..._selectedInvoiceIds];
   if (ids.length === 0) return;
   if (!confirm(`Delete ${ids.length} invoices? This cannot be undone.`)) return;
@@ -2854,6 +2886,7 @@ function printInvoiceById(id) {
   if (inv) printInvoice(inv);
 }
 function deleteInvoice(id) {
+  if (!requireDrive()) return;
   const inv = state.invoices.find(x => x.id === id);
   if (!inv) return;
   if (!confirm(`Delete invoice ${inv.order_id}? This cannot be undone.`)) return;
@@ -2969,6 +3002,7 @@ function closeEditCustomer() {
   document.getElementById('editCustomerModal').classList.add('hidden');
 }
 function saveEditCustomer() {
+  if (!requireDrive()) return;
   const id = document.getElementById('editCustomerModal').dataset.id;
   const c = state.customers.find(x => x.id === id);
   if (!c) return;
@@ -2986,6 +3020,7 @@ function saveEditCustomer() {
   toast('Customer updated', 'success');
 }
 function deleteCustomer(id) {
+  if (!requireDrive()) return;
   const c = state.customers.find(x => x.id === id);
   if (!c) return;
   if (!confirm(`Delete customer "${c.name}"? They'll no longer appear in autocomplete.`)) return;
@@ -3523,6 +3558,7 @@ function updateSyncUI(status, message = '') {
   const disconnectBtn = document.getElementById('disconnectDriveBtn');
   const syncBtn = document.getElementById('syncNowBtn');
   const lastSyncLabel = document.getElementById('lastSyncLabel');
+  const banner = document.getElementById('driveRequiredBanner');
 
   switch (status) {
     case 'connected':
@@ -3534,12 +3570,14 @@ function updateSyncUI(status, message = '') {
       connectBtn.style.display = 'none';
       disconnectBtn.style.display = 'inline-flex';
       syncBtn.style.display = 'inline-flex';
+      if (banner) banner.style.display = 'none';
       break;
     case 'syncing':
       pill.className = 'auth-pill';
       pill.style.background = 'var(--accent-soft)';
       pill.style.color = 'var(--accent)';
       pill.textContent = '⟳ Syncing…';
+      // Stay connected — banner stays hidden
       break;
     case 'connecting':
       pill.className = 'auth-pill';
@@ -3550,6 +3588,8 @@ function updateSyncUI(status, message = '') {
       connectBtn.style.display = 'none';
       disconnectBtn.style.display = 'none';
       syncBtn.style.display = 'none';
+      // Hide banner during reconnect attempt — give it a moment
+      if (banner) banner.style.display = 'none';
       break;
     case 'error':
       pill.className = 'auth-pill';
@@ -3557,6 +3597,7 @@ function updateSyncUI(status, message = '') {
       pill.style.color = 'var(--danger)';
       pill.textContent = 'Sync error';
       pill.title = message;
+      if (banner) banner.style.display = 'flex';
       break;
     case 'disconnected':
     default:
@@ -3568,6 +3609,7 @@ function updateSyncUI(status, message = '') {
       connectBtn.style.display = 'inline-flex';
       disconnectBtn.style.display = 'none';
       syncBtn.style.display = 'none';
+      if (banner) banner.style.display = 'flex';
       break;
   }
 
@@ -3576,6 +3618,21 @@ function updateSyncUI(status, message = '') {
   } else {
     lastSyncLabel.textContent = '';
   }
+}
+
+// Guard for write operations — returns true if Drive is connected.
+// If not connected, shows a clear message and returns false.
+function requireDrive() {
+  if (drive.accessToken && drive.fileIds && drive.fileIds.invoices) {
+    return true;
+  }
+  toast('🔒 Connect to Drive first — invoice cannot be saved without sync', 'error');
+  // Try to silently re-auth if we have a stored session
+  const saved = localStorage.getItem('involens_drive_token');
+  if (saved && drive.tokenClient) {
+    attemptSilentReauth();
+  }
+  return false;
 }
 
 function formatRelative(d) {
@@ -3913,6 +3970,10 @@ let _bulkParsedRows = null;
 async function handleBulkImport(event) {
   const file = event.target.files[0];
   if (!file) return;
+  if (!requireDrive()) {
+    event.target.value = '';
+    return;
+  }
   const previewEl = document.getElementById('bulkImportPreview');
   previewEl.classList.remove('hidden');
   previewEl.innerHTML = '<div class="text-muted">Reading file…</div>';
@@ -4017,6 +4078,7 @@ function cancelBulkImport() {
 }
 
 async function confirmBulkImport() {
+  if (!requireDrive()) return;
   if (!_bulkParsedRows) return;
   const valid = _bulkParsedRows.filter(p => p.errors.length === 0);
   if (valid.length === 0) {
