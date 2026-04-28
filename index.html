@@ -2585,21 +2585,49 @@ async function generateInvoicePDFBlob(invoice) {
   if (typeof window.jspdf === 'undefined' || typeof window.html2canvas === 'undefined') {
     throw new Error('PDF libraries not loaded yet');
   }
-  // Create an off-screen container for rendering. html2canvas needs visible DOM,
-  // so we position it fixed off-screen rather than display:none.
-  const container = document.createElement('div');
-  container.style.cssText = 'position: fixed; top: -10000px; left: 0; width: 210mm; background: white; z-index: -1;';
-  container.innerHTML = renderPrintHTML(invoice);
-  document.body.appendChild(container);
+
+  // CRITICAL: The invoice CSS is scoped to #printView (e.g. "#printView .brand-bar").
+  // We MUST render inside that element for styles to apply, otherwise we get unstyled text.
+  // We use the existing #printView element, but force it visible just long enough to capture.
+  const pv = document.getElementById('printView');
+  if (!pv) throw new Error('#printView element not found');
+
+  const previousInner = pv.innerHTML;
+  const previousDisplay = pv.style.display;
+  const previousPosition = pv.style.position;
+  const previousTop = pv.style.top;
+  const previousLeft = pv.style.left;
+  const previousZ = pv.style.zIndex;
+  const previousVisibility = pv.style.visibility;
+  const previousBackground = pv.style.background;
+
+  // Position off-screen but rendered (html2canvas requires visible layout)
+  pv.innerHTML = renderPrintHTML(invoice);
+  pv.style.display = 'block';
+  pv.style.position = 'fixed';
+  pv.style.top = '0';
+  pv.style.left = '-99999px';   // off-screen so user doesn't see it flash
+  pv.style.zIndex = '-1';
+  pv.style.visibility = 'visible';
+  pv.style.background = 'white';
 
   try {
-    const pageEl = container.querySelector('.print-page');
+    const pageEl = pv.querySelector('.print-page');
+    if (!pageEl) throw new Error('.print-page not found in rendered output');
+
+    // Give the browser one paint cycle to lay out the freshly-injected content.
+    // Without this, html2canvas can capture before fonts/styles fully apply.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
     // Render at 2x resolution for crisper output
     const canvas = await html2canvas(pageEl, {
       scale: 2,
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
+      // Important: tell html2canvas the size of the element it's capturing
+      windowWidth: pageEl.scrollWidth,
+      windowHeight: pageEl.scrollHeight,
     });
 
     // Create A4 PDF (210mm × 297mm)
@@ -2626,7 +2654,15 @@ async function generateInvoicePDFBlob(invoice) {
 
     return pdf.output('blob');
   } finally {
-    document.body.removeChild(container);
+    // Restore #printView to its previous state so the normal print flow still works
+    pv.innerHTML = previousInner;
+    pv.style.display = previousDisplay;
+    pv.style.position = previousPosition;
+    pv.style.top = previousTop;
+    pv.style.left = previousLeft;
+    pv.style.zIndex = previousZ;
+    pv.style.visibility = previousVisibility;
+    pv.style.background = previousBackground;
   }
 }
 
