@@ -829,9 +829,25 @@
               <div class="label-text">Invoice Date *</div>
               <input type="date" id="inv_date">
             </label>
-            <label class="full">
+            <label>
               <div class="label-text">AWB / Tracking ID</div>
               <input type="text" id="inv_awb" placeholder="optional, can fill after dispatch">
+            </label>
+            <label>
+              <div class="label-text">Courier Partner</div>
+              <input type="text" id="inv_courier" placeholder="e.g. Delhivery, BlueDart, Amazon Logistics" list="courierList">
+              <datalist id="courierList">
+                <option value="Amazon Logistics"></option>
+                <option value="Delhivery"></option>
+                <option value="BlueDart"></option>
+                <option value="Ekart"></option>
+                <option value="DTDC"></option>
+                <option value="Shadowfax"></option>
+                <option value="XpressBees"></option>
+                <option value="India Post"></option>
+                <option value="Ecom Express"></option>
+                <option value="Flipkart Logistics"></option>
+              </datalist>
             </label>
             <label class="full">
               <div class="row">
@@ -1004,6 +1020,7 @@
             <th>Total</th>
             <th>GST</th>
             <th>AWB</th>
+            <th>Courier</th>
             <th></th>
           </tr>
         </thead>
@@ -2345,6 +2362,7 @@ function saveAndPrintInvoice() {
     order_id: orderId,
     date: document.getElementById('inv_date').value,
     awb: document.getElementById('inv_awb').value.trim(),
+    courier: document.getElementById('inv_courier').value.trim(),
     is_replacement: isReplacement,
     consignee,
     seller_snapshot: { ...state.settings },
@@ -2427,6 +2445,7 @@ function resetInvoiceForm() {
   document.getElementById('inv_order_id').value = '';
   document.getElementById('inv_date').value = todayStr();
   document.getElementById('inv_awb').value = '';
+  document.getElementById('inv_courier').value = '';
   document.getElementById('inv_is_replacement').checked = false;
   document.getElementById('inv_cust_name').value = '';
   document.getElementById('inv_cust_address').value = '';
@@ -2449,6 +2468,7 @@ function loadInvoiceForEdit(id) {
   document.getElementById('inv_order_id').value = inv.order_id;
   document.getElementById('inv_date').value = inv.date;
   document.getElementById('inv_awb').value = inv.awb || '';
+  document.getElementById('inv_courier').value = inv.courier || '';
   document.getElementById('inv_is_replacement').checked = !!inv.is_replacement;
   document.getElementById('inv_cust_name').value = inv.consignee.name || '';
   document.getElementById('inv_cust_address').value = inv.consignee.address || '';
@@ -2716,7 +2736,7 @@ function renderHistory() {
 
   tbody.innerHTML = '';
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding: 30px; color: var(--text-faint);">${state.invoices.length === 0 ? 'No invoices yet — create your first one in the New Invoice tab' : 'No invoices match your search'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding: 30px; color: var(--text-faint);">${state.invoices.length === 0 ? 'No invoices yet — create your first one in the New Invoice tab' : 'No invoices match your search'}</td></tr>`;
     return;
   }
 
@@ -2734,6 +2754,7 @@ function renderHistory() {
       <td class="mono">${fmtCurrency(inv.totals?.grand_total || 0)}</td>
       <td class="mono">${fmtCurrency((inv.totals?.gst) || 0)}</td>
       <td class="mono" style="font-size: 11px;">${escapeHtml(inv.awb || '—')}</td>
+      <td style="font-size: 11px;">${escapeHtml(inv.courier || '—')}</td>
       <td>
         <button class="btn btn-sm" onclick="printInvoiceById('${escapeAttr(inv.id)}')">Print</button>
         <button class="btn btn-sm" onclick="loadInvoiceForEdit('${escapeAttr(inv.id)}')">Edit</button>
@@ -2854,7 +2875,7 @@ function exportInvoicesArray(invoices, filename) {
   const headers = [
     'Invoice No', 'Order Date', 'Consignee', 'Address', 'State', 'Pincode', 'Contact', 'Email', 'Buyer GSTIN',
     'SKU', 'Product Name', 'HSN', 'GST Rate', 'Qty', 'Unit Price (Incl)', 'Discount %',
-    'Taxable', 'IGST', 'CGST', 'SGST', 'Grand Total', 'AWB', 'Replacement'
+    'Taxable', 'IGST', 'CGST', 'SGST', 'Grand Total', 'AWB', 'Courier', 'Replacement'
   ];
   const rows = [];
   invoices.forEach(inv => {
@@ -2867,7 +2888,7 @@ function exportInvoicesArray(invoices, filename) {
         L.taxable, inv.totals?.is_inter_state ? L.gst_amount : 0,
         inv.totals?.is_inter_state ? 0 : round2(L.gst_amount / 2),
         inv.totals?.is_inter_state ? 0 : round2(L.gst_amount / 2),
-        L.total_inclusive, inv.awb, inv.is_replacement ? 'Yes' : 'No'
+        L.total_inclusive, inv.awb, inv.courier || '', inv.is_replacement ? 'Yes' : 'No'
       ]);
     });
   });
@@ -3689,8 +3710,68 @@ function normalizeDate(v) {
 }
 
 // Parse a single row from the bulk file into a normalized record
+// Normalise an AWB / tracking number — recover from common Excel/Sheets corruptions
+// Returns { value, warning } where warning is a string if something looks suspicious
+function normalizeAWB(raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: '', warning: null };
+  let s = String(raw).trim();
+  // Strip whitespace and common separators
+  s = s.replace(/\s+/g, '');
+  // Detect scientific notation — irreparable, but we try
+  const sciMatch = s.match(/^(-?\d+(?:\.\d+)?)[eE]([+-]?\d+)$/);
+  if (sciMatch) {
+    const mantissa = parseFloat(sciMatch[1]);
+    const exp = parseInt(sciMatch[2]);
+    // Convert to plain integer string if possible
+    const expanded = (mantissa * Math.pow(10, exp)).toFixed(0);
+    return {
+      value: expanded,
+      warning: `AWB was in scientific notation (${s}). Recovered as ${expanded} but may have lost precision — verify against source.`
+    };
+  }
+  // If it looks like a number with a trailing .0 or .00, strip the decimals
+  if (/^-?\d+\.0+$/.test(s)) s = s.replace(/\.0+$/, '');
+  // If it parsed as a JS number that's exactly representable, format as integer
+  if (/^-?\d+(?:\.\d+)?$/.test(s)) {
+    // Pure numeric — make sure no trailing decimal
+    s = s.replace(/\.0+$/, '');
+  }
+  // Sanity check: AWB should be 8-20 alphanumeric characters typically
+  if (s.length > 0 && s.length < 8) {
+    return { value: s, warning: `AWB "${s}" is unusually short (${s.length} chars) — may be truncated.` };
+  }
+  if (s.length > 25) {
+    return { value: s, warning: `AWB "${s}" is unusually long (${s.length} chars) — verify.` };
+  }
+  return { value: s, warning: null };
+}
+
+// Auto-detect courier from AWB pattern (best effort — operator can override)
+function detectCourierFromAWB(awb) {
+  if (!awb) return '';
+  const s = String(awb).toUpperCase().replace(/\s/g, '');
+  // Amazon Logistics — starts with TBA, LP, or specific prefixes
+  if (/^(TBA|LP)/i.test(s)) return 'Amazon Logistics';
+  // Delhivery — typically 12-13 digits
+  if (/^\d{12,13}$/.test(s) && s.startsWith('1')) return 'Delhivery';
+  // BlueDart — usually 11 digits
+  if (/^\d{11}$/.test(s)) return 'BlueDart';
+  // Ekart (Flipkart) — starts with FMPC, FMPP
+  if (/^(FMPC|FMPP|FK)/i.test(s)) return 'Ekart';
+  // DTDC — starts with D or specific prefixes
+  if (/^[A-Z]\d{8,12}$/.test(s)) return 'DTDC';
+  // Shadowfax — alphanumeric pattern
+  if (/^SF\d+/i.test(s)) return 'Shadowfax';
+  // XpressBees
+  if (/^XB\d+/i.test(s)) return 'XpressBees';
+  // India Post — uses EE, EM, RV patterns ending in IN
+  if (/^[A-Z]{2}\d{9}IN$/i.test(s)) return 'India Post';
+  return '';  // unknown — operator fills in
+}
+
 function parseBulkRow(row, idx) {
   const errors = [];
+  const warnings = [];
   const orderNo = findCol(row, ['Order No', 'Order ID', 'Order Number', 'Invoice No', 'Order']);
   if (!orderNo) errors.push('Missing Order No');
 
@@ -3717,16 +3798,24 @@ function parseBulkRow(row, idx) {
   const shipTaxable = parseFloat(findCol(row, ['Taxable.1', 'Shipping Taxable'])) || 0;
   const shipTax = parseFloat(findCol(row, ['Tax.1', 'Shipping Tax'])) || 0;
 
-  const awb = findCol(row, ['AWB', 'Tracking ID', 'Tracking', 'AWB Number']);
+  // AWB — normalise and warn on suspect values
+  const awbRaw = findCol(row, ['AWB', 'Tracking ID', 'Tracking', 'AWB Number', 'Waybill']);
+  const awbResult = normalizeAWB(awbRaw);
+  if (awbResult.warning) warnings.push(awbResult.warning);
+
+  // Courier — read from file if present, otherwise auto-detect from AWB
+  const courierRaw = findCol(row, ['Courier', 'Courier Partner', 'Carrier', 'Logistics Partner', 'Shipping Partner', 'Courier Name']);
+  let courier = courierRaw ? String(courierRaw).trim() : '';
+  if (!courier && awbResult.value) {
+    courier = detectCourierFromAWB(awbResult.value);
+  }
+
   const discountPct = parseFloat(findCol(row, ['Discount Percentage', 'Discount %', 'Discount'])) || 0;
   const productNameFromFile = findCol(row, ['Product Name', 'Product', 'Item Name', 'Description']) || '';
 
   // Compute total taxable (product + shipping if separate)
   const totalTaxable = round2(taxable + shipTaxable);
   const totalTax = round2(taxTotal || (tax + shipTax));
-  // Grand total = taxable + tax + (shipping pre-tax portion, since shipping was split into taxable+tax)
-  // If shipTaxable + shipTax > 0, those are already included in totalTaxable + totalTax
-  // Otherwise add raw shipping if it exists
   let grandTotal;
   if (shipTaxable > 0 || shipTax > 0) {
     grandTotal = round2(totalTaxable + totalTax);
@@ -3739,6 +3828,7 @@ function parseBulkRow(row, idx) {
   return {
     rowNum: idx + 1,
     errors,
+    warnings,
     parsed: {
       order_no: orderNo ? String(orderNo).trim() : '',
       date,
@@ -3757,7 +3847,8 @@ function parseBulkRow(row, idx) {
       shipping,
       grand_total: grandTotal,
       discount_pct: discountPct,
-      awb: awb ? String(awb).trim() : '',
+      awb: awbResult.value,
+      courier,
     }
   };
 }
@@ -3779,8 +3870,31 @@ function readBulkFile(file) {
         let sheetName = workbook.SheetNames[0];
         if (workbook.SheetNames.includes('Data')) sheetName = 'Data';
         const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
-        resolve(rows);
+        // Two passes: formatted (raw: false) for general fields, raw (raw: true) for big integers
+        const rowsFormatted = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+        const rowsRaw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+        // Merge: prefer raw value for AWB / Tracking / Contact fields (preserves big integers as numbers)
+        // Then we convert those numbers to plain integer strings to avoid scientific notation
+        const awbKeys = ['awb', 'trackingid', 'tracking', 'awbnumber', 'waybill', 'contact', 'phone', 'mobile', 'phonenumber'];
+        const merged = rowsFormatted.map((rf, i) => {
+          const rr = rowsRaw[i] || {};
+          const out = { ...rf };
+          for (const key of Object.keys(rf)) {
+            const norm = normalizeKey(key);
+            if (awbKeys.includes(norm)) {
+              const rawVal = rr[key];
+              if (typeof rawVal === 'number' && Number.isFinite(rawVal)) {
+                // Convert number to plain integer string (no scientific notation)
+                // Use toFixed(0) to avoid Number.toString() switching to scientific for large values
+                out[key] = Number.isInteger(rawVal) ? rawVal.toFixed(0) : String(rawVal);
+              } else if (rawVal !== undefined && rawVal !== null && rawVal !== '') {
+                out[key] = String(rawVal);
+              }
+            }
+          }
+          return out;
+        });
+        resolve(merged);
       } catch (e) {
         reject(e);
       }
@@ -3815,25 +3929,47 @@ async function handleBulkImport(event) {
 
     const valid = parsed.filter(p => p.errors.length === 0);
     const invalid = parsed.filter(p => p.errors.length > 0);
+    const withWarnings = parsed.filter(p => p.warnings && p.warnings.length > 0);
 
     // Preview top 5
-    const previewRows = parsed.slice(0, 5).map(p => `
-      <tr>
-        <td>${p.rowNum}</td>
-        <td class="mono">${escapeHtml(p.parsed.order_no || '—')}</td>
-        <td>${escapeHtml(p.parsed.consignee || '—')}</td>
-        <td>${escapeHtml(stateName(p.parsed.state) || p.parsed.stateText || '—')}</td>
-        <td class="mono">${escapeHtml(p.parsed.sku || '—')}</td>
-        <td class="mono">${fmtCurrency(p.parsed.grand_total)}</td>
-        <td>${p.errors.length === 0 ? '<span class="pill success">OK</span>' : `<span class="pill" style="background: var(--danger-soft); color: var(--danger);">${p.errors.length} err</span>`}</td>
-      </tr>
-    `).join('');
+    const previewRows = parsed.slice(0, 5).map(p => {
+      let statusPill;
+      if (p.errors.length > 0) {
+        statusPill = `<span class="pill" style="background: var(--danger-soft); color: var(--danger);">${p.errors.length} err</span>`;
+      } else if (p.warnings && p.warnings.length > 0) {
+        statusPill = `<span class="pill warn" title="${escapeAttr(p.warnings.join(' '))}">⚠ check</span>`;
+      } else {
+        statusPill = '<span class="pill success">OK</span>';
+      }
+      return `
+        <tr>
+          <td>${p.rowNum}</td>
+          <td class="mono">${escapeHtml(p.parsed.order_no || '—')}</td>
+          <td>${escapeHtml(p.parsed.consignee || '—')}</td>
+          <td>${escapeHtml(stateName(p.parsed.state) || p.parsed.stateText || '—')}</td>
+          <td class="mono">${escapeHtml(p.parsed.sku || '—')}</td>
+          <td class="mono">${fmtCurrency(p.parsed.grand_total)}</td>
+          <td class="mono" style="font-size: 11px;">${escapeHtml(p.parsed.awb || '—')}</td>
+          <td style="font-size: 11px;">${escapeHtml(p.parsed.courier || '—')}</td>
+          <td>${statusPill}</td>
+        </tr>
+      `;
+    }).join('');
 
     const errorList = invalid.length > 0 ? `
       <details style="margin-top: 12px;">
         <summary style="cursor: pointer; color: var(--danger); font-size: 12px;">${invalid.length} rows with errors — click to expand</summary>
         <div style="max-height: 200px; overflow-y: auto; margin-top: 8px; font-size: 12px;">
           ${invalid.map(p => `<div>Row ${p.rowNum}: ${p.errors.join(', ')}</div>`).join('')}
+        </div>
+      </details>
+    ` : '';
+
+    const warningList = withWarnings.length > 0 ? `
+      <details style="margin-top: 8px;">
+        <summary style="cursor: pointer; color: var(--accent); font-size: 12px;">⚠ ${withWarnings.length} rows with warnings (mostly tracking ID issues) — click to review</summary>
+        <div style="max-height: 200px; overflow-y: auto; margin-top: 8px; font-size: 12px;">
+          ${withWarnings.map(p => `<div>Row ${p.rowNum}: ${p.warnings.join(' / ')}</div>`).join('')}
         </div>
       </details>
     ` : '';
@@ -3845,6 +3981,7 @@ async function handleBulkImport(event) {
             <strong>${rows.length}</strong> rows in file ·
             <span style="color: var(--success);">${valid.length} ready</span>
             ${invalid.length > 0 ? `· <span style="color: var(--danger);">${invalid.length} with errors</span>` : ''}
+            ${withWarnings.length > 0 ? `· <span style="color: var(--accent);">${withWarnings.length} warnings</span>` : ''}
           </div>
           <div class="row" style="gap: 8px;">
             <button class="btn btn-sm" onclick="cancelBulkImport()">Cancel</button>
@@ -3854,14 +3991,16 @@ async function handleBulkImport(event) {
         <div class="table-wrap" style="max-height: 280px; overflow: auto;">
           <table class="data-table">
             <thead><tr>
-              <th>#</th><th>Order No</th><th>Consignee</th><th>State</th><th>SKU</th><th>Total</th><th>Status</th>
+              <th>#</th><th>Order No</th><th>Consignee</th><th>State</th><th>SKU</th><th>Total</th><th>AWB</th><th>Courier</th><th>Status</th>
             </tr></thead>
             <tbody>${previewRows}</tbody>
           </table>
         </div>
         ${errorList}
+        ${warningList}
         <div class="help" style="margin-top: 8px;">
-          ${rows.length > 5 ? `Preview shows first 5 rows. ` : ''}Click "Import" to add all valid rows. Errors will be skipped.
+          ${rows.length > 5 ? `Preview shows first 5 rows. ` : ''}Click "Import" to add all valid rows. Errors will be skipped; warnings won't block import.<br>
+          <strong>Tip:</strong> If your AWB / Tracking IDs come from Google Sheets, format the column as <strong>Plain Text</strong> (Format → Number → Plain text) before exporting to avoid scientific notation.
         </div>
       </div>
     `;
@@ -3951,6 +4090,7 @@ async function confirmBulkImport() {
         order_id: p.order_no,
         date: p.date,
         awb: p.awb,
+        courier: p.courier || '',
         is_replacement: false,
         consignee,
         seller_snapshot: { ...state.settings },
@@ -4039,13 +4179,13 @@ function downloadBulkTemplate() {
     'Order No', 'Invoice Date', 'Consignee', 'Address', 'Contact',
     'SKU', 'Product Name', 'Qty', 'Unit Price', 'Discount Percentage',
     'Taxable', 'Tax', 'Shipping', 'Taxable.1', 'Tax.1', 'Tax.2',
-    'IGST', 'SGST', 'CGST', 'State', 'AWB'
+    'IGST', 'SGST', 'CGST', 'State', 'AWB', 'Courier'
   ];
   const sample = [
     '402-7796310-8585127', '2025-11-30', 'Durga Balachandar',
     '#32, 4th Cross Road, Dollar Town Layout, BENGALURU KARNATAKA 560100',
     '8695336120', 'HT-KBM-EL-6x6', 'Honey Touch Nova King Size Bed', 1, 11699, 0,
-    9914.41, 1784.59, '', '', '', 1784.59, 1784.59, '', '', 'KARNATAKA', '20894533765991'
+    9914.41, 1784.59, '', '', '', 1784.59, 1784.59, '', '', 'KARNATAKA', '20894533765991', 'Amazon Logistics'
   ];
   const csv = [headers, sample]
     .map(row => row.map(cell => {
