@@ -2632,23 +2632,39 @@ async function generateInvoicePDFBlob(invoice) {
 
     // Create A4 PDF (210mm × 297mm)
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
     const pdfWidth = 210;
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    const pdfHeight = 297;
+    // Scale rendered image to A4 width
+    const imgWidthMm = pdfWidth;
+    const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
 
-    // If content fits on one page, simple add. Otherwise, paginate.
-    if (pdfHeight <= 297) {
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+    if (imgHeightMm <= pdfHeight + 10) {
+      // Fits on one page (with 10mm tolerance). Cap height at 297mm so it never overflows.
+      const finalHeight = Math.min(imgHeightMm, pdfHeight);
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, finalHeight);
     } else {
-      // Multi-page: slice the image into A4-sized chunks
-      let position = 0;
-      let remainingHeight = pdfHeight;
-      while (remainingHeight > 0) {
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
-        remainingHeight -= 297;
-        position -= 297;
-        if (remainingHeight > 0) pdf.addPage();
+      // Genuinely multi-page: slice the source canvas into A4-tall chunks.
+      // Each slice gets its own image, drawn at y=0 on a fresh page.
+      const pxPerMm = canvas.width / pdfWidth;
+      const sliceHeightPx = Math.floor(pdfHeight * pxPerMm);
+      const totalSlices = Math.ceil(canvas.height / sliceHeightPx);
+      for (let i = 0; i < totalSlices; i++) {
+        const startY = i * sliceHeightPx;
+        const thisSliceHeight = Math.min(sliceHeightPx, canvas.height - startY);
+        // Create a slice canvas
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = thisSliceHeight;
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(canvas, 0, startY, canvas.width, thisSliceHeight, 0, 0, canvas.width, thisSliceHeight);
+        const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.92);
+        const sliceMmHeight = thisSliceHeight / pxPerMm;
+        if (i > 0) pdf.addPage();
+        pdf.addImage(sliceData, 'JPEG', 0, 0, pdfWidth, sliceMmHeight);
       }
     }
 
