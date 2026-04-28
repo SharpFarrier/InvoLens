@@ -6,6 +6,8 @@
 <title>InvoLens — Sabi Wabi Innovations LLP</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
   :root {
     --bg: #fafaf9;
@@ -2408,16 +2410,11 @@ function saveAndPrintInvoice() {
 
   // Drive must be connected (guarded at function entry). Sync first, print only on success.
   Promise.all([pushToDrive('invoices'), pushToDrive('customers')])
-    .then(results => {
+    .then(async results => {
       const allOk = results.every(r => r === true);
-      if (allOk) {
-        toast('✓ Invoice saved & synced to Drive', 'success');
-        // Print only after successful sync
-        setTimeout(() => printInvoice(invoice), 200);
-      } else {
+      if (!allOk) {
         // Sync failed — roll back the local save so this invoice doesn't ghost into history
         if (currentInvoice) {
-          // We were editing — restore original
           const idx = state.invoices.findIndex(x => x.id === currentInvoice.id);
           if (idx >= 0) state.invoices[idx] = currentInvoice;
         } else {
@@ -2426,7 +2423,20 @@ function saveAndPrintInvoice() {
         saveState();
         renderHistory();
         toast('❌ Drive sync failed — invoice NOT saved. Reconnect and try again.', 'error');
+        return;
       }
+      // JSON synced. Now generate the PDF and upload it.
+      toast('✓ Saved & syncing PDF…', 'success');
+      try {
+        const upload = await generateAndUploadInvoicePDF(invoice);
+        toast(`✓ Invoice + PDF synced (${upload.filename})`, 'success');
+      } catch (pdfErr) {
+        // PDF upload failed but JSON is saved — let user know but don't block the print
+        console.error('PDF upload failed:', pdfErr);
+        toast('⚠️ Invoice saved but PDF upload failed: ' + (pdfErr.message || pdfErr) + '. You can retry from History.', 'error');
+      }
+      // Print regardless of PDF result (the user expects a print)
+      setTimeout(() => printInvoice(invoice), 200);
     })
     .catch(e => {
       // Same rollback on hard error
@@ -2557,6 +2567,167 @@ function printMultipleInvoices(invoices) {
     }, 300);
   }, 100);
 }
+
+// ============================================================
+// PDF GENERATION + DRIVE UPLOAD
+// ============================================================
+
+// Sanitize a string for use as a filename
+function sanitizeFilename(name) {
+  return String(name || 'invoice')
+    .replace(/[\/\\:*?"<>|]/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 120);
+}
+
+// Render an invoice to a PDF Blob using jsPDF + html2canvas
+async function generateInvoicePDFBlob(invoice) {
+  if (typeof window.jspdf === 'undefined' || typeof window.html2canvas === 'undefined') {
+    throw new Error('PDF libraries not loaded yet');
+  }
+  // Create an off-screen container for rendering. html2canvas needs visible DOM,
+  // so we position it fixed off-screen rather than display:none.
+  const container = document.createElement('div');
+  container.style.cssText = 'position: fixed; top: -10000px; left: 0; width: 210mm; background: white; z-index: -1;';
+  container.innerHTML = renderPrintHTML(invoice);
+  document.body.appendChild(container);
+
+  try {
+    const pageEl = container.querySelector('.print-page');
+    // Render at 2x resolution for crisper output
+    const canvas = await html2canvas(pageEl, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    // Create A4 PDF (210mm × 297mm)
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const pdfWidth = 210;
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    // If content fits on one page, simple add. Otherwise, paginate.
+    if (pdfHeight <= 297) {
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+    } else {
+      // Multi-page: slice the image into A4-sized chunks
+      let position = 0;
+      let remainingHeight = pdfHeight;
+      while (remainingHeight > 0) {
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+        remainingHeight -= 297;
+        position -= 297;
+        if (remainingHeight > 0) pdf.addPage();
+      }
+    }
+
+    return pdf.output('blob');
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+// Upload a PDF blob to the Invoices/ subfolder in Drive.
+// Overwrites if a file with the same name already exists.
+async function uploadInvoicePDFToDrive(invoice, blob) {
+  if (!drive.accessToken || !drive.invoicesFolderId) {
+    throw new Error('Drive not connected or Invoices folder unknown');
+  }
+  const filename = sanitizeFilename(invoice.order_id) + '.pdf';
+
+  // Check if file already exists
+  const q = encodeURIComponent(`name='${filename.replace(/'/g, "\\'")}' and '${drive.invoicesFolderId}' in parents and trashed = false`);
+  const search = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`);
+  const existingId = search.files && search.files[0] ? search.files[0].id : null;
+
+  // Multipart upload using FormData (works for both create and update)
+  const metadata = existingId
+    ? { name: filename }
+    : { name: filename, parents: [drive.invoicesFolderId], mimeType: 'application/pdf' };
+
+  const boundary = '-------invoLensBoundary' + Date.now();
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const closeDelim = `\r\n--${boundary}--`;
+
+  // Build multipart body manually because FormData doesn't always work cleanly
+  // with the Drive API's metadata-then-media format
+  const blobAsBase64 = await blobToBase64(blob);
+  const metaPart = JSON.stringify(metadata);
+  const body =
+    delimiter +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    metaPart +
+    delimiter +
+    'Content-Type: application/pdf\r\n' +
+    'Content-Transfer-Encoding: base64\r\n\r\n' +
+    blobAsBase64 +
+    closeDelim;
+
+  const url = existingId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart&fields=id,webViewLink`
+    : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink`;
+
+  const method = existingId ? 'PATCH' : 'POST';
+  const result = await driveFetch(url, {
+    method,
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+  });
+
+  return { id: result.id, webViewLink: result.webViewLink, filename };
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // result is "data:application/pdf;base64,XXX..." — strip the prefix
+      const dataUrl = reader.result;
+      const base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error('Failed to read blob'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Manual PDF (re)generate from History row
+async function regeneratePDF(id) {
+  if (!requireDrive()) return;
+  const inv = state.invoices.find(x => x.id === id);
+  if (!inv) return;
+  toast('Generating PDF…', '');
+  try {
+    const upload = await generateAndUploadInvoicePDF(inv);
+    toast(`✓ PDF uploaded: ${upload.filename}`, 'success');
+    renderHistory();
+  } catch (e) {
+    console.error('Manual PDF generation failed:', e);
+    toast('PDF generation failed: ' + (e.message || e), 'error');
+  }
+}
+
+
+// High-level: generate PDF, upload, and store the Drive file reference on the invoice
+async function generateAndUploadInvoicePDF(invoice) {
+  const blob = await generateInvoicePDFBlob(invoice);
+  const upload = await uploadInvoicePDFToDrive(invoice, blob);
+  // Store reference on the invoice for TrackLens / future use
+  invoice.pdf_drive_id = upload.id;
+  invoice.pdf_filename = upload.filename;
+  invoice.pdf_web_link = upload.webViewLink || '';
+  // Persist updated invoice in state
+  const idx = state.invoices.findIndex(x => x.id === invoice.id);
+  if (idx >= 0) state.invoices[idx] = invoice;
+  saveState();
+  // Push the updated JSON so the pdf_drive_id is reflected in the index
+  await pushToDrive('invoices');
+  return upload;
+}
+
 
 function renderPrintHTML(inv) {
   const s = inv.seller_snapshot || state.settings;
@@ -2789,6 +2960,10 @@ function renderHistory() {
       <td>
         <button class="btn btn-sm" onclick="printInvoiceById('${escapeAttr(inv.id)}')">Print</button>
         <button class="btn btn-sm" onclick="loadInvoiceForEdit('${escapeAttr(inv.id)}')">Edit</button>
+        ${inv.pdf_drive_id
+          ? `<a class="btn btn-sm" href="${escapeAttr(inv.pdf_web_link || `https://drive.google.com/file/d/${inv.pdf_drive_id}/view`)}" target="_blank" rel="noopener" title="Open PDF in Drive">PDF ↗</a>`
+          : `<button class="btn btn-sm" onclick="regeneratePDF('${escapeAttr(inv.id)}')" title="Generate and upload PDF to Drive">+PDF</button>`
+        }
       </td>
     `;
     tbody.appendChild(tr);
@@ -3385,10 +3560,15 @@ function invalidateSession(reason) {
 async function discoverFiles() {
   // Find existing files in folder, create if missing
   const q = encodeURIComponent(`'${DRIVE_CONFIG.FOLDER_ID}' in parents and trashed = false`);
-  const result = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=100`);
+  const result = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType)&pageSize=200`);
   const existing = {};
+  let invoicesFolderId = null;
   (result.files || []).forEach(f => {
-    existing[f.name] = f.id;
+    if (f.mimeType === 'application/vnd.google-apps.folder' && f.name === 'Invoices') {
+      invoicesFolderId = f.id;
+    } else {
+      existing[f.name] = f.id;
+    }
   });
 
   for (const [key, name] of Object.entries(DRIVE_CONFIG.FILES)) {
@@ -3398,6 +3578,26 @@ async function discoverFiles() {
       drive.fileIds[key] = await createDriveFile(name);
     }
   }
+
+  // Ensure the Invoices subfolder exists
+  if (invoicesFolderId) {
+    drive.invoicesFolderId = invoicesFolderId;
+  } else {
+    drive.invoicesFolderId = await createDriveSubfolder('Invoices');
+  }
+}
+
+async function createDriveSubfolder(name) {
+  const result = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      parents: [DRIVE_CONFIG.FOLDER_ID],
+      mimeType: 'application/vnd.google-apps.folder',
+    }),
+  });
+  return result.id;
 }
 
 async function createDriveFile(name) {
@@ -4049,6 +4249,12 @@ async function handleBulkImport(event) {
             <button class="btn btn-sm btn-primary" onclick="confirmBulkImport()" ${valid.length === 0 ? 'disabled' : ''}>Import ${valid.length} Invoices</button>
           </div>
         </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 12px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="bulkGeneratePdfs" checked>
+            Also generate & upload PDFs to Drive (~2s per invoice)
+          </label>
+        </div>
         <div class="table-wrap" style="max-height: 280px; overflow: auto;">
           <table class="data-table">
             <thead><tr>
@@ -4194,6 +4400,9 @@ async function confirmBulkImport() {
   }
 
   document.getElementById('bulkImportFile').value = '';
+
+  // Capture PDF generation flag before nullifying
+  const generatePdfs = document.getElementById('bulkGeneratePdfs')?.checked === true;
   _bulkParsedRows = null;
 
   // Re-render
@@ -4206,16 +4415,16 @@ async function confirmBulkImport() {
   if (skippedCount > 0) summary += `, skipped ${skippedCount}`;
   toast(summary, 'success');
 
-  // Show print-all option in the preview panel
+  // Show post-import panel with print-all option and PDF progress
   const previewEl = document.getElementById('bulkImportPreview');
   previewEl.classList.remove('hidden');
-  previewEl.innerHTML = `
+  const initialPanelHTML = `
     <div class="card" style="background: var(--success-soft); border: 1px solid var(--success); padding: 14px;">
       <div class="row" style="justify-content: space-between; align-items: center;">
         <div>
           <strong style="color: var(--success);">${summary}</strong>
-          <div class="text-muted" style="font-size: 12px; margin-top: 4px;">
-            Print all ${importedIds.length} as one combined PDF, or visit the History tab to manage them.
+          <div class="text-muted" style="font-size: 12px; margin-top: 4px;" id="bulkPdfProgress">
+            ${generatePdfs ? 'Generating PDFs… 0 / ' + importedIds.length : 'PDF generation skipped (checkbox unchecked).'}
           </div>
         </div>
         <div class="row" style="gap: 8px;">
@@ -4225,6 +4434,38 @@ async function confirmBulkImport() {
       </div>
     </div>
   `;
+  previewEl.innerHTML = initialPanelHTML;
+
+  // Generate PDFs sequentially in background if requested
+  if (generatePdfs && importedIds.length > 0) {
+    bulkGeneratePDFs(importedIds);
+  }
+}
+
+// Generate PDFs for a list of invoice IDs sequentially, updating progress UI.
+async function bulkGeneratePDFs(ids) {
+  const total = ids.length;
+  let done = 0;
+  let failed = 0;
+  const progressEl = document.getElementById('bulkPdfProgress');
+  for (const id of ids) {
+    const inv = state.invoices.find(x => x.id === id);
+    if (!inv) { failed++; done++; continue; }
+    try {
+      await generateAndUploadInvoicePDF(inv);
+    } catch (e) {
+      console.error(`PDF for ${inv.order_id} failed:`, e);
+      failed++;
+    }
+    done++;
+    if (progressEl) {
+      progressEl.textContent = `Generating PDFs… ${done} / ${total}` + (failed > 0 ? ` (${failed} failed)` : '');
+    }
+  }
+  if (progressEl) {
+    progressEl.textContent = `✓ ${total - failed} PDFs uploaded to Drive` + (failed > 0 ? `, ${failed} failed (check console)` : '');
+  }
+  toast(`PDFs done: ${total - failed} uploaded${failed > 0 ? ', ' + failed + ' failed' : ''}`, failed > 0 ? 'error' : 'success');
 }
 
 function printImportedBatch(ids) {
