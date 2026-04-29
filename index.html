@@ -1291,9 +1291,11 @@
     <div class="card">
       <h3 class="card-title">Data Management</h3>
       <p class="card-sub">All data lives in browser storage and syncs to Drive when connected.</p>
+      <div id="storageHealth" style="margin-bottom: 12px; padding: 10px; background: var(--surface-2); border-radius: 6px; font-size: 12px;"></div>
       <div class="row" style="gap: 8px;">
         <button class="btn btn-sm" onclick="exportAllData()">Export All Data (JSON)</button>
         <button class="btn btn-sm" onclick="importAllData()">Import Data</button>
+        <button class="btn btn-sm" onclick="cleanupLocalStorage()">Clean up local cache</button>
         <button class="btn btn-sm btn-danger" onclick="clearAllData()">Reset Everything</button>
       </div>
     </div>
@@ -1503,6 +1505,10 @@ function loadState() {
       state.products = [...window.PRODUCTS_SEED];
       saveState();
     }
+
+    // One-time migration: strip embedded logo/signature from old invoice snapshots.
+    // These bloat localStorage by ~50-500KB per invoice multiplied by N — common cause of "storage full" errors.
+    migrateStripSnapshotImages();
   } catch (e) {
     console.error('Failed to load state:', e);
     toast('Failed to load saved data — starting fresh', 'error');
@@ -1510,12 +1516,161 @@ function loadState() {
   }
 }
 
-function saveState() {
+// ============================================================
+// DIAGNOSTIC LOGGER — captures recent events for debugging save/sync issues.
+// Logs to a ring buffer (50 entries). Visible in Settings -> Data Management,
+// and copyable via copyDiagnosticInfo() so the user can paste into a bug report.
+// ============================================================
+const DIAG_LIMIT = 50;
+const diagLog = [];
+function diag(level, msg, data) {
+  const entry = {
+    t: new Date().toISOString(),
+    level,            // 'info' | 'warn' | 'error'
+    msg,
+    data: data || null,
+  };
+  diagLog.push(entry);
+  if (diagLog.length > DIAG_LIMIT) diagLog.shift();
+  // Also log to console with a prefix so it's filterable
+  const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+  fn('[InvoLens]', msg, data || '');
+}
+
+// Measure current localStorage usage, both for our key and total origin usage
+function measureStorage() {
+  let ourBytes = 0;
+  let totalBytes = 0;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const raw = localStorage.getItem(STORAGE_KEY) || '';
+    ourBytes = new Blob([raw]).size;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      const v = localStorage.getItem(k) || '';
+      totalBytes += new Blob([k + v]).size;
+    }
   } catch (e) {
-    console.error('Failed to save state:', e);
-    toast('Failed to save — storage may be full', 'error');
+    // ignore
+  }
+  return { ourBytes, totalBytes, ourKB: (ourBytes/1024).toFixed(1), totalKB: (totalBytes/1024).toFixed(1) };
+}
+
+// Concurrency lock for saveState — prevents two writes from racing during sync
+let _saveLock = false;
+const _saveQueue = [];
+function withSaveLock(fn) {
+  if (_saveLock) {
+    return new Promise((resolve, reject) => {
+      _saveQueue.push({ fn, resolve, reject });
+    });
+  }
+  _saveLock = true;
+  try {
+    const result = fn();
+    return Promise.resolve(result).finally(() => {
+      _saveLock = false;
+      // Drain queue
+      if (_saveQueue.length > 0) {
+        const next = _saveQueue.shift();
+        try {
+          const r = next.fn();
+          Promise.resolve(r).then(next.resolve, next.reject);
+        } catch (e) { next.reject(e); }
+      }
+    });
+  } catch (e) {
+    _saveLock = false;
+    return Promise.reject(e);
+  }
+}
+
+
+// IMPORTANT: We deliberately exclude logo_b64 and signature_b64 — those can be hundreds of KB each
+// and would multiply localStorage usage by N invoices. Visual elements get pulled from CURRENT
+// settings at print/PDF time. The snapshot is for legal/audit purposes — text fields only.
+function makeSellerSnapshot() {
+  const s = state.settings || {};
+  return {
+    company: s.company,
+    address: s.address,
+    state: s.state,
+    gstin: s.gstin,
+    email: s.email,
+    payment_terms: s.payment_terms,
+    declaration: s.declaration,
+    signatory_name: s.signatory_name,
+    currency: s.currency,
+    default_hsn: s.default_hsn,
+    default_gst: s.default_gst,
+    total_mode: s.total_mode,
+    // logo_b64 and signature_b64 intentionally omitted — read from live settings at render time
+  };
+}
+
+// One-time migration: strip image data from existing seller_snapshots to free up localStorage.
+// Runs once per browser session if there are invoices that still carry embedded images.
+function migrateStripSnapshotImages() {
+  let stripped = 0;
+  for (const inv of state.invoices || []) {
+    if (inv.seller_snapshot) {
+      if (inv.seller_snapshot.logo_b64) { delete inv.seller_snapshot.logo_b64; stripped++; }
+      if (inv.seller_snapshot.signature_b64) { delete inv.seller_snapshot.signature_b64; stripped++; }
+    }
+  }
+  if (stripped > 0) {
+    console.log('[InvoLens] Migration: stripped ' + stripped + ' embedded images from invoice snapshots');
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      // If even this fails, we'll handle it elsewhere
+      console.error('Migration save failed:', e);
+    }
+  }
+}
+
+function saveState() {
+  const t0 = performance.now();
+  try {
+    const payload = JSON.stringify(state);
+    const sizeKB = (payload.length / 1024).toFixed(1);
+    localStorage.setItem(STORAGE_KEY, payload);
+    const elapsed = (performance.now() - t0).toFixed(1);
+    // Only log slow or large saves to avoid spam
+    if (parseFloat(elapsed) > 50 || parseFloat(sizeKB) > 1024) {
+      diag('info', `saveState ok — ${sizeKB}KB in ${elapsed}ms (sync=${drive.syncing ? 'yes' : 'no'})`);
+    }
+  } catch (e) {
+    const storage = measureStorage();
+    diag('error', `saveState FAILED — ${e.name}: ${e.message}`, {
+      errorName: e.name,
+      errorCode: e.code,
+      ourLocalStorageKB: storage.ourKB,
+      totalLocalStorageKB: storage.totalKB,
+      invoicesCount: state.invoices.length,
+      syncInProgress: drive.syncing === true,
+      stack: (e.stack || '').split('\n').slice(0, 3).join(' | '),
+    });
+    // Detect quota error specifically and offer recovery
+    if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014 || /quota/i.test(e.message))) {
+      // Try the migration as a one-shot recovery
+      let recovered = false;
+      try {
+        migrateStripSnapshotImages();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        recovered = true;
+        diag('warn', 'Auto-recovery via image strip succeeded');
+      } catch (e2) {
+        recovered = false;
+        diag('error', 'Auto-recovery FAILED — ' + (e2.message || ''));
+      }
+      if (recovered) {
+        toast('⚠️ Storage was full — auto-cleaned and saved. See Settings → Data Management.', 'success');
+      } else {
+        toast('❌ Browser storage is full. Drive sync still works, but local cache cannot save. See Settings → Data Management.', 'error');
+      }
+    } else {
+      toast('Failed to save — ' + (e.message || 'unknown error'), 'error');
+    }
   }
 }
 
@@ -1577,6 +1732,7 @@ function renderSettings() {
   renderSignaturePreview();
   renderLogoPreview();
   renderOverrides();
+  renderStorageHealth();
 }
 
 function renderSignaturePreview() {
@@ -1882,6 +2038,120 @@ function importAllData() {
     reader.readAsText(file);
   };
   input.click();
+}
+
+// Show storage usage info in the Data Management card
+function renderStorageHealth() {
+  const el = document.getElementById('storageHealth');
+  if (!el) return;
+  try {
+    const storage = measureStorage();
+    const ourMb = (storage.ourBytes / 1024 / 1024).toFixed(2);
+    const allMb = (storage.totalBytes / 1024 / 1024).toFixed(2);
+    const invCount = state.invoices.length;
+    const avgPerInv = invCount > 0 ? Math.round(storage.ourBytes / invCount) : 0;
+    // Most browsers cap localStorage around 5-10 MB per origin
+    const usagePct = Math.min(100, Math.round((storage.totalBytes / (5 * 1024 * 1024)) * 100));
+    const barColor = usagePct > 80 ? 'var(--danger)' : usagePct > 60 ? 'var(--accent)' : 'var(--success)';
+
+    // Recent diagnostic log (last 8 entries)
+    const recentDiag = diagLog.slice(-8).reverse().map(e => {
+      const time = e.t.slice(11, 19);
+      const color = e.level === 'error' ? 'var(--danger)' : e.level === 'warn' ? 'var(--accent)' : 'var(--text-muted)';
+      return `<div style="font-family: monospace; font-size: 11px; color: ${color}; padding: 2px 0;">${time} ${escapeHtml(e.msg)}</div>`;
+    }).join('') || '<div class="text-faint" style="font-size: 11px;">No events recorded yet.</div>';
+
+    el.innerHTML = `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+        <strong>Local cache usage</strong>
+        <span class="text-muted">${invCount} invoices · ${ourMb} MB · avg ${(avgPerInv/1024).toFixed(1)} KB/invoice</span>
+      </div>
+      <div style="height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;">
+        <div style="height: 100%; width: ${usagePct}%; background: ${barColor};"></div>
+      </div>
+      <div class="text-faint" style="font-size: 11px; margin-top: 4px;">
+        Total origin storage: ${allMb} MB of ~5 MB browser limit (${usagePct}%). All data is also on Drive.
+      </div>
+      <details style="margin-top: 10px;">
+        <summary style="cursor: pointer; font-size: 12px; color: var(--text-muted);">Recent diagnostic events (${diagLog.length})</summary>
+        <div style="margin-top: 6px; max-height: 200px; overflow-y: auto; padding: 6px 8px; background: var(--surface); border-radius: 4px;">
+          ${recentDiag}
+        </div>
+        <button class="btn btn-sm" style="margin-top: 6px;" onclick="copyDiagnosticInfo()">Copy full diagnostic info</button>
+      </details>
+    `;
+  } catch (e) {
+    el.innerHTML = '<span class="text-muted">Could not read storage stats.</span>';
+  }
+}
+
+// Copy a paste-ready diagnostic dump to the clipboard
+async function copyDiagnosticInfo() {
+  const storage = measureStorage();
+  const dump = {
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    storage: {
+      involensBytes: storage.ourBytes,
+      involensMB: (storage.ourBytes / 1024 / 1024).toFixed(2),
+      totalOriginBytes: storage.totalBytes,
+      totalOriginMB: (storage.totalBytes / 1024 / 1024).toFixed(2),
+    },
+    counts: {
+      invoices: state.invoices.length,
+      customers: state.customers.length,
+      products: state.products.length,
+    },
+    drive: {
+      connected: !!drive.accessToken,
+      syncing: drive.syncing === true,
+      lastSync: drive.lastSync ? drive.lastSync.toISOString() : null,
+      lastSyncError: drive.lastSyncError || null,
+      hasInvoicesFolder: !!drive.invoicesFolderId,
+    },
+    settings: {
+      hasLogo: !!state.settings.logo_b64,
+      logoSizeKB: state.settings.logo_b64 ? (state.settings.logo_b64.length / 1024).toFixed(1) : 0,
+      hasSignature: !!state.settings.signature_b64,
+      signatureSizeKB: state.settings.signature_b64 ? (state.settings.signature_b64.length / 1024).toFixed(1) : 0,
+    },
+    recentEvents: diagLog,
+  };
+  const text = JSON.stringify(dump, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Diagnostic info copied to clipboard — paste it in chat', 'success');
+  } catch (e) {
+    // Fallback: show in a textarea for manual copy
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write('<pre style="font: 12px monospace; padding: 16px;">' + escapeHtml(text) + '</pre>');
+    } else {
+      console.log('=== InvoLens Diagnostic Dump ===');
+      console.log(text);
+      toast('Could not copy — see browser console for diagnostic dump', 'error');
+    }
+  }
+}
+
+// Clean up local cache: strip embedded images, drop oldest invoices if still over budget.
+// Drive copies remain — this only affects the browser's local cache.
+function cleanupLocalStorage() {
+  if (!confirm('This will free up local browser storage by:\n• Stripping embedded logos/signatures from old invoices\n• Keeping all data on Drive\n\nNothing is deleted from Drive. Proceed?')) return;
+  let stripped = 0;
+  for (const inv of state.invoices || []) {
+    if (inv.seller_snapshot) {
+      if (inv.seller_snapshot.logo_b64) { delete inv.seller_snapshot.logo_b64; stripped++; }
+      if (inv.seller_snapshot.signature_b64) { delete inv.seller_snapshot.signature_b64; stripped++; }
+    }
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    renderStorageHealth();
+    toast(`Cleaned up — stripped ${stripped} embedded images. Local cache reduced.`, 'success');
+  } catch (e) {
+    toast('Cleanup ran but save failed: ' + (e.message || ''), 'error');
+  }
 }
 
 function clearAllData() {
@@ -2380,7 +2650,7 @@ function saveAndPrintInvoice() {
     courier: document.getElementById('inv_courier').value.trim(),
     is_replacement: isReplacement,
     consignee,
-    seller_snapshot: { ...state.settings },
+    seller_snapshot: makeSellerSnapshot(),
     lines: invoiceLines,
     totals: {
       taxable: totals.totalTaxable,
@@ -2808,6 +3078,10 @@ function renderPrintHTML(inv) {
   const buyerStateName = stateName(inv.consignee.state);
   const sellerStateName = stateName(s.state);
   const currency = s.currency || '₹';
+  // Logo and signature are NOT stored in seller_snapshot (to keep localStorage small).
+  // Pull from live settings at render time. Falls back to snapshot if it has them (legacy invoices).
+  const logo = state.settings.logo_b64 || s.logo_b64 || '';
+  const signature = state.settings.signature_b64 || s.signature_b64 || '';
 
   return `
     <div class="print-page">
@@ -2815,7 +3089,7 @@ function renderPrintHTML(inv) {
 
       <div class="pv-header">
         <div class="pv-seller">
-          ${s.logo_b64 ? `<img src="${s.logo_b64}" class="pv-logo" alt="logo">` : ''}
+          ${logo ? `<img src="${logo}" class="pv-logo" alt="logo">` : ''}
           <div class="seller-name">${escapeHtml(s.company)}</div>
           <div class="seller-meta">${escapeHtml(s.address)}</div>
           ${s.email ? `<div class="seller-meta">${escapeHtml(s.email)}</div>` : ''}
@@ -2915,7 +3189,7 @@ function renderPrintHTML(inv) {
         </div>
         <div class="col-right">
           <div class="for-line">For <strong>${escapeHtml(s.company)}</strong></div>
-          ${s.signature_b64 ? `<img class="signatory-img" src="${s.signature_b64}">` : '<div style="height: 48px;"></div>'}
+          ${signature ? `<img class="signatory-img" src="${signature}">` : '<div style="height: 48px;"></div>'}
           <div class="signatory-name">${escapeHtml(s.signatory_name || 'Authorised Signatory')}</div>
         </div>
       </div>
@@ -3731,6 +4005,8 @@ async function pullAllFromDrive() {
 // Invalidates session only on genuine 401 (auth dead), not other errors.
 async function pushToDrive(kind) {
   if (!drive.accessToken || !drive.fileIds[kind]) return false;
+  const t0 = performance.now();
+  diag('info', `pushToDrive(${kind}) starting`, { invoicesCount: state.invoices.length });
   try {
     drive.syncing = true;
     updateSyncUI('syncing');
@@ -3747,6 +4023,8 @@ async function pushToDrive(kind) {
         console.warn(`Could not fetch remote ${kind}, pushing local:`, downErr.message);
       }
       const merged = mergeById(remoteArr, state[kind]);
+      const mergedSizeKB = (JSON.stringify(merged).length / 1024).toFixed(1);
+      diag('info', `pushToDrive(${kind}) merged: remote=${remoteArr.length}, local=${state[kind].length}, merged=${merged.length} (${mergedSizeKB}KB)`);
       state[kind] = merged;
       saveState();
       await uploadDriveFile(drive.fileIds[kind], JSON.stringify(merged));
@@ -3760,10 +4038,13 @@ async function pushToDrive(kind) {
     drive.lastSyncError = null;
     drive.syncing = false;
     updateSyncUI('connected');
+    const elapsed = (performance.now() - t0).toFixed(0);
+    diag('info', `pushToDrive(${kind}) ok in ${elapsed}ms`);
     return true;
   } catch (e) {
     drive.syncing = false;
     drive.lastSyncError = e.message;
+    diag('error', `pushToDrive(${kind}) FAILED: ${e.name}: ${e.message}`);
     console.error(`Push ${kind} failed:`, e);
     if (e.status === 401) {
       // Real auth failure — token is dead
@@ -4413,7 +4694,7 @@ async function confirmBulkImport() {
         courier: p.courier || '',
         is_replacement: false,
         consignee,
-        seller_snapshot: { ...state.settings },
+        seller_snapshot: makeSellerSnapshot(),
         lines: lineItems,
         totals: {
           taxable: p.taxable,
