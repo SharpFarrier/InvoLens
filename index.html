@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>InvoLens — Sabi Wabi Innovations LLP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Allura&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -447,13 +450,13 @@
     margin-bottom: 12px;
   }
 
-  /* ============ PRINT VIEW — ELEGANT ============ */
+  /* ============ PRINT VIEW — HONEYTOUCH ============ */
   #printView {
     display: none;
     background: white;
-    color: #1c1917;
+    color: #3d2817;
     padding: 0;
-    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-family: 'Inter', -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 11px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
@@ -461,290 +464,521 @@
   #printView .print-page {
     width: 210mm;
     min-height: 297mm;
-    padding: 16mm 16mm 14mm;
+    padding: 0;
     margin: 0 auto;
-    background: white;
+    background: #fdfbf7;
     box-sizing: border-box;
     position: relative;
-    color: #1c1917;
+    color: #3d2817;
+    overflow: hidden;
   }
-  /* Brand bar at top */
-  #printView .brand-bar {
-    height: 5px;
-    background: #b45309;
-    margin: -16mm -16mm 14mm;
+  /* Decorative honeycomb corners */
+  #printView .corner-deco {
+    position: absolute;
+    width: 110px;
+    height: 110px;
+    pointer-events: none;
+    opacity: 0.55;
   }
-  /* Header — two columns */
-  #printView .pv-header {
+  #printView .corner-deco.tr { top: 14mm; right: 14mm; }
+  #printView .corner-deco.br { bottom: 14mm; right: 14mm; }
+  #printView .corner-deco.bl-bee {
+    bottom: 14mm; left: 16mm;
+    width: 60px; height: 60px;
+    opacity: 1;
+  }
+  #printView .pv-content {
+    position: relative;
+    padding: 14mm 16mm 14mm;
+    z-index: 1;
+  }
+
+  /* Three-column header */
+  #printView .pv-top {
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 24px;
-    margin-bottom: 22px;
+    grid-template-columns: 1.05fr 1fr 1.1fr;
+    gap: 14px;
     align-items: flex-start;
+    margin-bottom: 14px;
   }
-  #printView .pv-seller {
-    line-height: 1.5;
+  #printView .pv-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
-  #printView .pv-seller .seller-name {
-    font-size: 17px;
-    font-weight: 700;
-    color: #1c1917;
-    margin-bottom: 4px;
-    letter-spacing: -0.01em;
+  #printView .pv-brand .wordmark {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 900;
+    font-size: 32px;
+    color: #b88838;
+    line-height: 1;
+    letter-spacing: -0.02em;
   }
-  #printView .pv-seller .seller-meta {
-    font-size: 10.5px;
-    color: #57534e;
-    margin-bottom: 1px;
+  #printView .pv-brand .wordmark .small-t {
+    font-size: 24px;
   }
-  #printView .pv-seller .seller-gstin {
-    font-size: 10.5px;
-    color: #1c1917;
+  #printView .pv-brand .tagline {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: #b88838;
+    text-transform: uppercase;
+    font-weight: 600;
     margin-top: 4px;
-    font-weight: 500;
   }
+  #printView .pv-brand .pv-logo {
+    max-height: 70px;
+    object-fit: contain;
+    margin-bottom: 4px;
+  }
+
+  /* Middle column — contact block with icon prefixes */
+  #printView .pv-contact {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 10.5px;
+    color: #3d2817;
+    padding-top: 4px;
+  }
+  #printView .pv-contact .row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  #printView .pv-contact .icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #f3e6cc;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #b88838;
+    font-size: 10px;
+  }
+  #printView .pv-contact .text strong {
+    display: block;
+    font-weight: 600;
+    color: #3d2817;
+    margin-bottom: 1px;
+    font-size: 11px;
+  }
+  #printView .pv-contact .text {
+    line-height: 1.4;
+  }
+
+  /* Right column — INVOICE wordmark + meta */
   #printView .pv-doctype {
     text-align: right;
   }
-  #printView .pv-doctype .label {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #b45309;
-    font-weight: 600;
-    margin-bottom: 2px;
+  #printView .pv-doctype .doc-word {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 900;
+    font-size: 56px;
+    color: #3d2817;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
   }
-  #printView .pv-doctype .invoice-no {
-    font-size: 17px;
-    font-weight: 700;
-    color: #1c1917;
-    font-variant-numeric: tabular-nums;
+  #printView .pv-doctype .doc-divider {
+    height: 2px;
+    width: 110px;
+    background: #b88838;
+    margin: 6px 0 6px auto;
+    position: relative;
   }
-  #printView .pv-doctype .invoice-date {
-    font-size: 11px;
-    color: #57534e;
-    margin-top: 2px;
+  #printView .pv-doctype .doc-divider::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #b88838;
+    border-radius: 50%;
+    top: -3px;
+    right: -4px;
   }
-  /* Section heading */
-  #printView .pv-section-h {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #b45309;
-    font-weight: 600;
-    margin: 18px 0 6px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #e7e5e4;
-  }
-  /* Consignee block */
-  #printView .pv-consignee {
+  #printView .pv-doctype .meta {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px 24px;
-    padding: 10px 14px;
-    background: #fafaf9;
-    border-radius: 4px;
-    margin-bottom: 4px;
+    grid-template-columns: auto 8px auto;
+    gap: 4px 8px;
+    font-size: 11px;
+    text-align: left;
+    justify-content: end;
+    margin-left: auto;
+    margin-top: 8px;
   }
-  #printView .pv-consignee .field-label {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #a8a29e;
-    margin-bottom: 1px;
+  #printView .pv-doctype .meta .label {
+    color: #6b5340;
     font-weight: 500;
   }
-  #printView .pv-consignee .field-value {
-    font-size: 11px;
-    color: #1c1917;
-    margin-bottom: 6px;
+  #printView .pv-doctype .meta .colon { color: #b88838; }
+  #printView .pv-doctype .meta .val {
+    color: #3d2817;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
-  #printView .pv-consignee .full {
-    grid-column: 1 / -1;
+
+  /* Bill To card + Thank you script */
+  #printView .pv-billrow {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 18px;
+    align-items: stretch;
+    margin: 8px 0 14px;
   }
-  /* Items table — minimal, financial */
-  #printView .items-table {
-    width: 100%;
-    border-collapse: collapse;
+  #printView .bill-card {
+    background: linear-gradient(135deg, #fbf1de 0%, #f5e2bd 100%);
+    border-radius: 12px;
+    padding: 14px 18px;
+    position: relative;
+  }
+  #printView .bill-card .bill-icon {
+    position: absolute;
+    top: 14px; left: 14px;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #b88838;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+  #printView .bill-card .bill-content {
+    margin-left: 38px;
+  }
+  #printView .bill-card .label {
+    font-size: 9px;
+    color: #b88838;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  #printView .bill-card .name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #3d2817;
+    margin-bottom: 5px;
+  }
+  #printView .bill-card .address-line {
+    font-size: 10.5px;
+    color: #3d2817;
+    line-height: 1.45;
+    margin-bottom: 1px;
+  }
+  #printView .bill-card .meta-line {
+    font-size: 10.5px;
+    color: #3d2817;
     margin-top: 4px;
   }
+  #printView .bill-card .meta-line .lbl {
+    color: #8a6f55;
+    font-weight: 500;
+  }
+
+  #printView .pv-thanks {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 8px 4px;
+  }
+  #printView .pv-thanks .script {
+    font-family: 'Allura', cursive;
+    font-size: 32px;
+    color: #c89548;
+    line-height: 1;
+    transform: rotate(-3deg);
+  }
+
+  /* Items table */
+  #printView .items-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 4px;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(184, 136, 56, 0.15);
+  }
   #printView .items-table thead tr {
-    border-bottom: 2px solid #1c1917;
+    background: #c89548;
   }
   #printView .items-table th {
-    padding: 8px 6px;
-    font-size: 9px;
-    font-weight: 600;
+    padding: 10px 10px;
+    font-size: 10px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #57534e;
+    letter-spacing: 0.1em;
+    color: #fff;
     text-align: left;
-    background: transparent;
+    background: #c89548;
+  }
+  #printView .items-table tbody tr {
+    background: #fdfbf7;
+  }
+  #printView .items-table tbody tr:nth-child(even) {
+    background: #f9efde;
   }
   #printView .items-table td {
-    padding: 10px 6px;
-    border-bottom: 1px solid #e7e5e4;
+    padding: 11px 10px;
     vertical-align: top;
     font-size: 11px;
+    color: #3d2817;
+    border: none;
   }
   #printView .items-table td.num,
   #printView .items-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
   #printView .items-table td.ctr,
   #printView .items-table th.ctr { text-align: center; }
   #printView .items-table .product-name {
-    font-weight: 500;
-    color: #1c1917;
+    font-weight: 600;
+    color: #3d2817;
     line-height: 1.4;
   }
   #printView .items-table .product-meta {
+    font-style: italic;
     font-size: 10px;
-    color: #78716c;
-    margin-top: 3px;
+    color: #8a6f55;
+    margin-top: 2px;
   }
-  /* Summary panel — right-aligned */
-  #printView .summary-wrap {
+
+  /* Lower row — payment/bank on left, totals on right */
+  #printView .pv-lower {
+    display: grid;
+    grid-template-columns: 1fr 0.85fr;
+    gap: 22px;
+    margin-top: 16px;
+  }
+
+  #printView .pay-section .section-h {
     display: flex;
-    justify-content: flex-end;
-    margin-top: 12px;
+    align-items: center;
+    gap: 8px;
+    color: #b88838;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
   }
-  #printView .summary-box {
-    width: 50%;
-    min-width: 280px;
+  #printView .pay-section .section-h .ico {
+    width: 22px; height: 22px; border-radius: 4px;
+    background: #f3e6cc; color: #b88838;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
   }
-  #printView .summary-box .row {
+  #printView .pay-section .pay-line {
+    font-size: 10.5px;
+    color: #6b5340;
+    margin-bottom: 6px;
+  }
+  #printView .pay-methods {
     display: flex;
-    justify-content: space-between;
-    padding: 5px 12px;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  #printView .pay-methods .pm {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    color: #3d2817;
+  }
+  #printView .pay-methods .pm .pm-ico {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    background: #f3e6cc;
+    color: #b88838;
+    display: flex; align-items: center; justify-content: center;
     font-size: 11px;
   }
-  #printView .summary-box .row .label {
-    color: #57534e;
+
+  /* Bank details two-col grid */
+  #printView .bank-grid {
+    display: grid;
+    grid-template-columns: max-content auto;
+    gap: 4px 14px;
+    font-size: 10.5px;
+    color: #3d2817;
   }
-  #printView .summary-box .row .val {
+  #printView .bank-grid .lbl {
+    color: #8a6f55;
+    font-weight: 500;
+  }
+  #printView .bank-grid .val {
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: #1c1917;
   }
-  #printView .summary-box .total-row {
+
+  /* Totals card */
+  #printView .totals-card {
+    background: #fdfbf7;
+    border-radius: 8px;
+  }
+  #printView .totals-card .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 14px;
+    border-bottom: 1px solid #f3e6cc;
+    font-size: 11px;
+  }
+  #printView .totals-card .row:last-of-type {
+    border-bottom: none;
+  }
+  #printView .totals-card .row .label {
+    color: #6b5340;
+  }
+  #printView .totals-card .row .val {
+    font-variant-numeric: tabular-nums;
+    color: #3d2817;
+    font-weight: 500;
+  }
+  #printView .totals-card .total-row {
+    background: #fbe8c2;
+    border-radius: 6px;
     margin-top: 6px;
-    padding: 12px;
-    background: #fef3c7;
-    border-radius: 4px;
+    padding: 14px 14px;
     display: flex;
     justify-content: space-between;
     align-items: baseline;
   }
-  #printView .summary-box .total-row .label {
-    font-size: 11px;
+  #printView .totals-card .total-row .label {
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 600;
-    color: #92400e;
-  }
-  #printView .summary-box .total-row .val {
-    font-size: 18px;
+    letter-spacing: 0.1em;
     font-weight: 700;
-    color: #92400e;
+    color: #3d2817;
+  }
+  #printView .totals-card .total-row .val {
+    font-size: 19px;
+    font-weight: 800;
+    color: #3d2817;
     font-variant-numeric: tabular-nums;
   }
+
   /* Amount in words */
   #printView .pv-words {
-    margin-top: 14px;
-    padding: 10px 14px;
-    background: #fafaf9;
-    border-left: 3px solid #b45309;
-    font-size: 11px;
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: #fdfbf7;
+    border-left: 3px solid #c89548;
+    font-size: 10.5px;
     border-radius: 0 4px 4px 0;
   }
   #printView .pv-words .label {
     font-size: 9px;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #a8a29e;
+    letter-spacing: 0.12em;
+    color: #b88838;
     margin-bottom: 2px;
-    font-weight: 500;
+    font-weight: 700;
   }
   #printView .pv-words .value {
-    color: #1c1917;
-    font-weight: 500;
+    color: #3d2817;
+    font-weight: 600;
     text-transform: capitalize;
   }
+
   /* Replacement stamp */
   #printView .replacement-stamp {
-    margin-top: 14px;
-    padding: 14px;
-    border: 2px solid #c2410c;
-    color: #c2410c;
+    margin-top: 12px;
+    padding: 12px;
+    border: 2px solid #b25e1e;
+    color: #b25e1e;
+    background: #fff;
     text-align: center;
     font-weight: 700;
     font-size: 13px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    border-radius: 4px;
+    border-radius: 6px;
   }
-  /* Footer */
-  #printView .pv-footer {
-    margin-top: 28px;
-    padding-top: 16px;
-    border-top: 1px solid #e7e5e4;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-  }
-  #printView .pv-footer .col-left {
-    font-size: 10.5px;
-    color: #57534e;
-  }
-  #printView .pv-footer .col-left .label {
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #a8a29e;
-    font-weight: 500;
-    margin-bottom: 2px;
-  }
-  #printView .pv-footer .col-left .value {
-    color: #1c1917;
-    margin-bottom: 8px;
-  }
-  #printView .pv-footer .col-right {
+
+  /* Signatory */
+  #printView .pv-signatory {
+    margin-top: 14px;
     text-align: right;
   }
-  #printView .pv-footer .col-right .for-line {
-    font-size: 11px;
-    color: #57534e;
-    margin-bottom: 8px;
+  #printView .pv-signatory .for-line {
+    font-size: 10.5px;
+    color: #6b5340;
+    margin-bottom: 4px;
   }
-  #printView .pv-footer .col-right .for-line strong {
-    color: #1c1917;
+  #printView .pv-signatory .for-line strong {
+    color: #3d2817;
   }
-  #printView .signatory-img {
-    max-height: 48px;
-    margin: 6px 0 6px auto;
+  #printView .pv-signatory .signatory-img {
+    max-height: 44px;
+    margin: 4px 0 4px auto;
     display: block;
   }
-  #printView .pv-footer .col-right .signatory-name {
-    font-size: 11px;
-    color: #1c1917;
-    font-weight: 500;
-    border-top: 1px solid #d6d3d1;
-    padding-top: 6px;
+  #printView .pv-signatory .signatory-name {
+    font-size: 10.5px;
+    color: #3d2817;
+    font-weight: 600;
+    border-top: 1px solid #d4b889;
+    padding-top: 4px;
     display: inline-block;
     min-width: 140px;
   }
-  /* Declaration */
+
+  /* Bottom strip */
+  #printView .pv-bottom-strip {
+    margin: 18px -16mm 0;
+    background: #f9efde;
+    padding: 12px 16mm;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 18px;
+    font-size: 10.5px;
+    color: #3d2817;
+  }
+  #printView .pv-bottom-strip .item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+  }
+  #printView .pv-bottom-strip .item:first-child { justify-content: flex-start; }
+  #printView .pv-bottom-strip .item:last-child { justify-content: flex-end; }
+  #printView .pv-bottom-strip .ico {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #c89548;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  /* Compliance microline (declaration) */
   #printView .pv-declaration {
-    margin-top: 18px;
-    padding-top: 12px;
-    border-top: 1px solid #e7e5e4;
+    margin-top: 10px;
     font-size: 9.5px;
-    color: #78716c;
+    color: #8a6f55;
     line-height: 1.5;
     text-align: center;
+    padding: 0 18mm;
   }
-  /* Logo */
-  #printView .pv-logo {
-    max-height: 36px;
-    margin-bottom: 8px;
+  #printView .pv-thank-line {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #6b5340;
+    text-align: center;
+    font-style: italic;
+  }
+
+  /* "Thank you!" script under the strip */
+  #printView .pv-thank-script {
+    font-family: 'Allura', cursive;
+    font-size: 26px;
+    color: #c89548;
+    text-align: center;
+    line-height: 1;
+    margin-top: -2px;
   }
 
   /* Print-specific CSS */
@@ -754,13 +988,6 @@
     #printView {
       display: block !important;
       position: absolute; top: 0; left: 0; width: 100%;
-    }
-    #printView .print-page {
-      padding: 14mm 16mm 12mm;
-      margin: 0;
-    }
-    #printView .brand-bar {
-      margin: -14mm -16mm 12mm;
     }
     .topbar, .tabs { display: none !important; }
     @page { size: A4; margin: 0; }
@@ -1173,8 +1400,18 @@
       <p class="card-sub">Prints at the top of every invoice.</p>
       <div class="form-grid">
         <label class="full">
-          <div class="label-text">Company Name</div>
+          <div class="label-text">Company Name (legal entity)</div>
           <input type="text" id="set_company" value="SABI WABI INNOVATIONS LLP">
+          <div class="help">Used for legal compliance — appears as "For [company]" near the signatory.</div>
+        </label>
+        <label>
+          <div class="label-text">Brand Name</div>
+          <input type="text" id="set_brand_name" placeholder="Honey Touch">
+          <div class="help">Big wordmark at the top of the invoice.</div>
+        </label>
+        <label>
+          <div class="label-text">Tagline (optional)</div>
+          <input type="text" id="set_tagline" placeholder="e.g. Touch of nature, feel the care">
         </label>
         <label class="full">
           <div class="label-text">Address</div>
@@ -1191,14 +1428,22 @@
         </label>
         <label>
           <div class="label-text">Email</div>
-          <input type="text" id="set_email" placeholder="optional">
+          <input type="text" id="set_email" placeholder="hello@honeytouch.in">
+        </label>
+        <label>
+          <div class="label-text">Phone</div>
+          <input type="text" id="set_phone" placeholder="+91 ...">
+        </label>
+        <label>
+          <div class="label-text">Website</div>
+          <input type="text" id="set_website" placeholder="www.honeytouch.in">
         </label>
         <label>
           <div class="label-text">Authorised By</div>
           <input type="text" id="set_signatory_name" value="Partner">
         </label>
         <label class="full">
-          <div class="label-text">Logo (optional)</div>
+          <div class="label-text">Logo (optional — uses typographic wordmark if blank)</div>
           <input type="file" id="set_logo_file" accept="image/*" onchange="handleLogoUpload(event)">
           <div id="logoPreview" style="margin-top:8px;"></div>
         </label>
@@ -1206,6 +1451,34 @@
           <div class="label-text">Signature Image (optional)</div>
           <input type="file" id="set_signature_file" accept="image/*" onchange="handleSignatureUpload(event)">
           <div id="signaturePreview" style="margin-top:8px;"></div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Bank details -->
+    <div class="card">
+      <h3 class="card-title">Bank Details</h3>
+      <p class="card-sub">Prints in the footer of every invoice. Leave blank to hide the section.</p>
+      <div class="form-grid">
+        <label>
+          <div class="label-text">Account Holder</div>
+          <input type="text" id="set_bank_holder" placeholder="Sabi Wabi Innovations LLP">
+        </label>
+        <label>
+          <div class="label-text">Bank Name</div>
+          <input type="text" id="set_bank_name" placeholder="HDFC Bank">
+        </label>
+        <label>
+          <div class="label-text">Account Number</div>
+          <input type="text" id="set_bank_account" placeholder="...">
+        </label>
+        <label>
+          <div class="label-text">IFSC Code</div>
+          <input type="text" id="set_bank_ifsc" placeholder="HDFC0000123">
+        </label>
+        <label class="full">
+          <div class="label-text">UPI ID (optional)</div>
+          <input type="text" id="set_bank_upi" placeholder="honeytouch@hdfcbank">
         </label>
       </div>
     </div>
@@ -1451,13 +1724,23 @@ const INDIAN_STATES = [
 
 const DEFAULT_SETTINGS = {
   company: 'SABI WABI INNOVATIONS LLP',
+  brand_name: 'Honey Touch',
+  tagline: '',
   address: 'Hissa No 1 B, Survey No.72, Rayate, Kalyan-murbad Road, Thane, MAHARASHTRA, 421301',
   gstin: '27AFNFS2007K1ZR',
   state: 'MH',
   email: '',
+  phone: '',
+  website: '',
   signatory_name: 'Partner',
   signature_b64: '',
   logo_b64: '',
+  // Bank details for the invoice footer
+  bank_holder: '',
+  bank_name: '',
+  bank_account: '',
+  bank_ifsc: '',
+  bank_upi: '',
   default_hsn: '9403',
   default_gst: 18,
   total_mode: 'inclusive',
@@ -1592,10 +1875,14 @@ function makeSellerSnapshot() {
   const s = state.settings || {};
   return {
     company: s.company,
+    brand_name: s.brand_name,
+    tagline: s.tagline,
     address: s.address,
     state: s.state,
     gstin: s.gstin,
     email: s.email,
+    phone: s.phone,
+    website: s.website,
     payment_terms: s.payment_terms,
     declaration: s.declaration,
     signatory_name: s.signatory_name,
@@ -1603,6 +1890,11 @@ function makeSellerSnapshot() {
     default_hsn: s.default_hsn,
     default_gst: s.default_gst,
     total_mode: s.total_mode,
+    bank_holder: s.bank_holder,
+    bank_name: s.bank_name,
+    bank_account: s.bank_account,
+    bank_ifsc: s.bank_ifsc,
+    bank_upi: s.bank_upi,
     // logo_b64 and signature_b64 intentionally omitted — read from live settings at render time
   };
 }
@@ -1717,12 +2009,21 @@ function populateStateDropdown(selectEl, value) {
 
 function renderSettings() {
   const s = state.settings;
-  document.getElementById('set_company').value = s.company;
-  document.getElementById('set_address').value = s.address;
-  document.getElementById('set_gstin').value = s.gstin;
+  document.getElementById('set_company').value = s.company || '';
+  document.getElementById('set_brand_name').value = s.brand_name || '';
+  document.getElementById('set_tagline').value = s.tagline || '';
+  document.getElementById('set_address').value = s.address || '';
+  document.getElementById('set_gstin').value = s.gstin || '';
   populateStateDropdown(document.getElementById('set_state'), s.state);
   document.getElementById('set_email').value = s.email || '';
-  document.getElementById('set_signatory_name').value = s.signatory_name;
+  document.getElementById('set_phone').value = s.phone || '';
+  document.getElementById('set_website').value = s.website || '';
+  document.getElementById('set_signatory_name').value = s.signatory_name || '';
+  document.getElementById('set_bank_holder').value = s.bank_holder || '';
+  document.getElementById('set_bank_name').value = s.bank_name || '';
+  document.getElementById('set_bank_account').value = s.bank_account || '';
+  document.getElementById('set_bank_ifsc').value = s.bank_ifsc || '';
+  document.getElementById('set_bank_upi').value = s.bank_upi || '';
   document.getElementById('set_default_hsn').value = s.default_hsn;
   document.getElementById('set_default_gst').value = s.default_gst;
   document.getElementById('set_total_mode').value = s.total_mode;
@@ -1837,19 +2138,28 @@ function updateOverride(i, field, value) {
 }
 
 function saveSettings() {
+  if (!requireDrive()) return;
   state.settings.company = document.getElementById('set_company').value.trim();
+  state.settings.brand_name = document.getElementById('set_brand_name').value.trim();
+  state.settings.tagline = document.getElementById('set_tagline').value.trim();
   state.settings.address = document.getElementById('set_address').value.trim();
   state.settings.gstin = document.getElementById('set_gstin').value.trim().toUpperCase();
   state.settings.state = document.getElementById('set_state').value;
   state.settings.email = document.getElementById('set_email').value.trim();
+  state.settings.phone = document.getElementById('set_phone').value.trim();
+  state.settings.website = document.getElementById('set_website').value.trim();
   state.settings.signatory_name = document.getElementById('set_signatory_name').value.trim();
+  state.settings.bank_holder = document.getElementById('set_bank_holder').value.trim();
+  state.settings.bank_name = document.getElementById('set_bank_name').value.trim();
+  state.settings.bank_account = document.getElementById('set_bank_account').value.trim();
+  state.settings.bank_ifsc = document.getElementById('set_bank_ifsc').value.trim().toUpperCase();
+  state.settings.bank_upi = document.getElementById('set_bank_upi').value.trim();
   state.settings.default_hsn = document.getElementById('set_default_hsn').value.trim();
   state.settings.default_gst = parseFloat(document.getElementById('set_default_gst').value) || 0;
   state.settings.total_mode = document.getElementById('set_total_mode').value;
   state.settings.payment_terms = document.getElementById('set_payment_terms').value.trim();
   state.settings.currency = document.getElementById('set_currency').value.trim() || '₹';
   state.settings.declaration = document.getElementById('set_declaration').value.trim();
-  // Overrides already updated in-place via updateOverride
   saveState('settings');
   toast('Settings saved', 'success');
 }
@@ -3054,6 +3364,22 @@ async function generateAndUploadInvoicePDF(invoice) {
 function renderPrintHTML(inv) {
   const s = inv.seller_snapshot || state.settings;
   const t = inv.totals;
+  const live = state.settings;
+  // Logo / signature: live settings only (snapshot doesn't carry images)
+  const logo = live.logo_b64 || s.logo_b64 || '';
+  const signature = live.signature_b64 || s.signature_b64 || '';
+  // For brand metadata: prefer snapshot (frozen at invoice time), fall back to live for legacy invoices
+  const brandName = s.brand_name || live.brand_name || 'Honey Touch';
+  const tagline = s.tagline !== undefined ? s.tagline : (live.tagline || '');
+  const phone = s.phone || live.phone || '';
+  const website = s.website || live.website || '';
+  const email = s.email || live.email || '';
+  const bankHolder = s.bank_holder || live.bank_holder || '';
+  const bankName = s.bank_name || live.bank_name || '';
+  const bankAccount = s.bank_account || live.bank_account || '';
+  const bankIfsc = s.bank_ifsc || live.bank_ifsc || '';
+  const bankUpi = s.bank_upi || live.bank_upi || '';
+
   const itemRows = inv.lines.map(L => {
     return `
       <tr>
@@ -3062,8 +3388,8 @@ function renderPrintHTML(inv) {
           <div class="product-name">${escapeHtml(L.product_name)}</div>
           <div class="product-meta">SKU ${escapeHtml(L.sku)} · HSN ${escapeHtml(L.hsn)}</div>
         </td>
-        <td class="num">${L.unit_inclusive.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
         <td class="ctr">${L.qty}</td>
+        <td class="num">${L.unit_inclusive.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
         <td class="num">${(L.unit_taxable * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
         <td class="num">${(L.unit_inclusive * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
       </tr>
@@ -3078,129 +3404,212 @@ function renderPrintHTML(inv) {
   const buyerStateName = stateName(inv.consignee.state);
   const sellerStateName = stateName(s.state);
   const currency = s.currency || '₹';
-  // Logo and signature are NOT stored in seller_snapshot (to keep localStorage small).
-  // Pull from live settings at render time. Falls back to snapshot if it has them (legacy invoices).
-  const logo = state.settings.logo_b64 || s.logo_b64 || '';
-  const signature = state.settings.signature_b64 || s.signature_b64 || '';
+
+  const hasBank = !!(bankHolder || bankName || bankAccount || bankIfsc || bankUpi);
+
+  // Decorative honeycomb pattern (SVG)
+  const honeycombSVG = `
+    <svg class="corner-deco tr" viewBox="0 0 110 110">
+      ${[
+        [55, 18], [82, 18], [27, 38], [55, 38], [82, 38], [27, 58], [55, 58], [82, 58],
+      ].map(([cx, cy]) => `
+        <polygon points="${cx},${cy-12} ${cx+10},${cy-6} ${cx+10},${cy+6} ${cx},${cy+12} ${cx-10},${cy+6} ${cx-10},${cy-6}"
+                 fill="none" stroke="#c89548" stroke-width="1.4"/>`).join('')}
+    </svg>
+    <svg class="corner-deco br" viewBox="0 0 110 110">
+      ${[
+        [27, 52], [55, 52], [82, 52], [27, 72], [55, 72], [82, 72], [27, 92], [55, 92],
+      ].map(([cx, cy]) => `
+        <polygon points="${cx},${cy-12} ${cx+10},${cy-6} ${cx+10},${cy+6} ${cx},${cy+12} ${cx-10},${cy+6} ${cx-10},${cy-6}"
+                 fill="none" stroke="#c89548" stroke-width="1.4"/>`).join('')}
+    </svg>
+  `;
+
+  // Bee-in-hexagon corner mark (SVG)
+  const beeMarkSVG = `
+    <svg class="corner-deco bl-bee" viewBox="0 0 60 60">
+      <polygon points="30,4 52,16 52,44 30,56 8,44 8,16" fill="none" stroke="#c89548" stroke-width="1.6"/>
+      <ellipse cx="30" cy="32" rx="9" ry="6" fill="#c89548"/>
+      <line x1="22" y1="29" x2="38" y2="29" stroke="#fdfbf7" stroke-width="1.2"/>
+      <line x1="22" y1="34" x2="38" y2="34" stroke="#fdfbf7" stroke-width="1.2"/>
+      <ellipse cx="22" cy="27" rx="5" ry="3" fill="#fdfbf7" opacity="0.85"/>
+      <ellipse cx="38" cy="27" rx="5" ry="3" fill="#fdfbf7" opacity="0.85"/>
+    </svg>
+  `;
+
+  // Brand block: logo if uploaded, else typographic wordmark
+  const brandBlock = logo
+    ? `<img src="${logo}" class="pv-logo" alt="${escapeHtml(brandName)}">`
+    : `<div class="wordmark">${escapeHtml(brandName)}</div>`;
+
+  // Bank details rows (only show fields with values)
+  const bankRows = hasBank ? `
+    <div class="bank-grid">
+      ${bankName ? `<div class="lbl">Bank Name</div><div class="val">${escapeHtml(bankName)}</div>` : ''}
+      ${bankHolder ? `<div class="lbl">Account Name</div><div class="val">${escapeHtml(bankHolder)}</div>` : ''}
+      ${bankAccount ? `<div class="lbl">Account No.</div><div class="val">${escapeHtml(bankAccount)}</div>` : ''}
+      ${bankIfsc ? `<div class="lbl">IFSC Code</div><div class="val">${escapeHtml(bankIfsc)}</div>` : ''}
+      ${bankUpi ? `<div class="lbl">UPI ID</div><div class="val">${escapeHtml(bankUpi)}</div>` : ''}
+    </div>
+  ` : '';
 
   return `
     <div class="print-page">
-      <div class="brand-bar"></div>
+      ${honeycombSVG}
+      ${beeMarkSVG}
 
-      <div class="pv-header">
-        <div class="pv-seller">
-          ${logo ? `<img src="${logo}" class="pv-logo" alt="logo">` : ''}
-          <div class="seller-name">${escapeHtml(s.company)}</div>
-          <div class="seller-meta">${escapeHtml(s.address)}</div>
-          ${s.email ? `<div class="seller-meta">${escapeHtml(s.email)}</div>` : ''}
-          <div class="seller-gstin">GSTIN: ${escapeHtml(s.gstin)} · ${escapeHtml(sellerStateName)}</div>
-        </div>
-        <div class="pv-doctype">
-          <div class="label">${inv.is_replacement ? 'Replacement Invoice' : 'Tax Invoice'}</div>
-          <div class="invoice-no">${escapeHtml(inv.order_id)}</div>
-          <div class="invoice-date">${formatDateForPrint(inv.date)}</div>
-        </div>
-      </div>
-
-      <div class="pv-section-h">Bill To</div>
-      <div class="pv-consignee">
-        <div class="full">
-          <div class="field-label">Consignee</div>
-          <div class="field-value"><strong>${escapeHtml(inv.consignee.name)}</strong></div>
-        </div>
-        <div class="full">
-          <div class="field-label">Address</div>
-          <div class="field-value">${escapeHtml(inv.consignee.address)}${inv.consignee.pincode ? ' — ' + escapeHtml(inv.consignee.pincode) : ''}</div>
-        </div>
-        <div>
-          <div class="field-label">State</div>
-          <div class="field-value">${escapeHtml(buyerStateName)}</div>
-        </div>
-        <div>
-          <div class="field-label">Contact</div>
-          <div class="field-value">${escapeHtml(inv.consignee.contact || '—')}</div>
-        </div>
-        ${inv.consignee.email ? `
-        <div>
-          <div class="field-label">Email</div>
-          <div class="field-value">${escapeHtml(inv.consignee.email)}</div>
-        </div>` : ''}
-        ${inv.consignee.gstin ? `
-        <div>
-          <div class="field-label">Buyer GSTIN</div>
-          <div class="field-value">${escapeHtml(inv.consignee.gstin)}</div>
-        </div>` : ''}
-      </div>
-
-      <div class="pv-section-h">Items</div>
-      <table class="items-table">
-        <thead>
-          <tr>
-            <th class="ctr" style="width: 5%;">#</th>
-            <th>Product</th>
-            <th class="num" style="width: 13%;">Unit Price</th>
-            <th class="ctr" style="width: 6%;">Qty</th>
-            <th class="num" style="width: 14%;">Taxable</th>
-            <th class="num" style="width: 14%;">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemRows}
-        </tbody>
-      </table>
-
-      <div class="summary-wrap">
-        <div class="summary-box">
-          <div class="row">
-            <span class="label">Taxable Value</span>
-            <span class="val">${currency} ${t.taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+      <div class="pv-content">
+        <!-- Three-column header -->
+        <div class="pv-top">
+          <div class="pv-brand">
+            ${brandBlock}
+            ${tagline ? `<div class="tagline">${escapeHtml(tagline)}</div>` : ''}
           </div>
-          ${taxLines}
-          <div class="row">
-            <span class="label">Shipping</span>
-            <span class="val" style="color: #a8a29e; font-style: italic;">included</span>
+
+          <div class="pv-contact">
+            <div class="row">
+              <div class="icon">⌖</div>
+              <div class="text">
+                <strong>${escapeHtml(s.company)}</strong>
+                ${escapeHtml(s.address)}
+              </div>
+            </div>
+            ${phone ? `
+            <div class="row">
+              <div class="icon">☎</div>
+              <div class="text">${escapeHtml(phone)}</div>
+            </div>` : ''}
+            ${email ? `
+            <div class="row">
+              <div class="icon">✉</div>
+              <div class="text">${escapeHtml(email)}</div>
+            </div>` : ''}
+            ${website ? `
+            <div class="row">
+              <div class="icon">⌬</div>
+              <div class="text">${escapeHtml(website)}</div>
+            </div>` : ''}
           </div>
-          <div class="total-row">
-            <span class="label">Total Payable</span>
-            <span class="val">${currency} ${t.grand_total.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+
+          <div class="pv-doctype">
+            <div class="doc-word">${inv.is_replacement ? 'REPLACEMENT' : 'INVOICE'}</div>
+            <div class="doc-divider"></div>
+            <div class="meta">
+              <div class="label">Invoice No.</div><div class="colon">:</div><div class="val">${escapeHtml(inv.order_id)}</div>
+              <div class="label">Invoice Date</div><div class="colon">:</div><div class="val">${formatDateForPrint(inv.date)}</div>
+              <div class="label">Seller GSTIN</div><div class="colon">:</div><div class="val">${escapeHtml(s.gstin)}</div>
+              <div class="label">Place of Supply</div><div class="colon">:</div><div class="val">${escapeHtml(buyerStateName)}</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="pv-words">
-        <div class="label">Amount in words</div>
-        <div class="value">${escapeHtml(numberToWordsIndian(t.grand_total))} only</div>
-      </div>
+        <!-- Bill To + Thank you -->
+        <div class="pv-billrow">
+          <div class="bill-card">
+            <div class="bill-icon">👤</div>
+            <div class="bill-content">
+              <div class="label">BILL TO</div>
+              <div class="name">${escapeHtml(inv.consignee.name)}</div>
+              <div class="address-line">${escapeHtml(inv.consignee.address)}${inv.consignee.pincode ? ' — ' + escapeHtml(inv.consignee.pincode) : ''}</div>
+              <div class="meta-line"><span class="lbl">State:</span> ${escapeHtml(buyerStateName)} ${inv.consignee.contact ? '&nbsp;&nbsp;<span class="lbl">Contact:</span> ' + escapeHtml(inv.consignee.contact) : ''}</div>
+              ${inv.consignee.email ? `<div class="meta-line"><span class="lbl">Email:</span> ${escapeHtml(inv.consignee.email)}</div>` : ''}
+              ${inv.consignee.gstin ? `<div class="meta-line"><span class="lbl">Buyer GSTIN:</span> ${escapeHtml(inv.consignee.gstin)}</div>` : ''}
+            </div>
+          </div>
 
-      ${inv.is_replacement
-        ? `<div class="replacement-stamp">Replacement Invoice — No Charge</div>`
-        : ''}
-
-      <div class="pv-footer">
-        <div class="col-left">
-          ${inv.awb ? `
-            <div class="label">Tracking ID</div>
-            <div class="value">${escapeHtml(inv.awb)}</div>
-          ` : ''}
-          ${!inv.is_replacement ? `
-            <div class="label">Payment Terms</div>
-            <div class="value">${escapeHtml(s.payment_terms)}</div>
-          ` : ''}
+          <div class="pv-thanks">
+            <div class="script">Thank you for your business!</div>
+          </div>
         </div>
-        <div class="col-right">
+
+        <!-- Items -->
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th class="ctr" style="width: 5%;">No.</th>
+              <th>Description</th>
+              <th class="ctr" style="width: 7%;">Qty</th>
+              <th class="num" style="width: 13%;">Unit Price</th>
+              <th class="num" style="width: 14%;">Taxable</th>
+              <th class="num" style="width: 14%;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemRows}
+          </tbody>
+        </table>
+
+        <!-- Lower row: payment + bank (left), totals (right) -->
+        <div class="pv-lower">
+          <div class="pay-section">
+            <div class="section-h"><div class="ico">✉</div>PAYMENT METHODS</div>
+            <div class="pay-line">${escapeHtml(s.payment_terms || '100% advance before Dispatch')}</div>
+            <div class="pay-methods">
+              <div class="pm"><div class="pm-ico">⇄</div>Bank Transfer</div>
+              <div class="pm"><div class="pm-ico">⌬</div>UPI</div>
+              <div class="pm"><div class="pm-ico">▭</div>Credit / Debit Card</div>
+            </div>
+
+            ${hasBank ? `
+              <div class="section-h" style="margin-top: 4px;"><div class="ico">▭</div>BANK DETAILS</div>
+              ${bankRows}
+            ` : ''}
+          </div>
+
+          <div class="totals-card">
+            <div class="row">
+              <span class="label">Taxable Value</span>
+              <span class="val">${currency} ${t.taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+            </div>
+            ${taxLines}
+            <div class="row">
+              <span class="label">Shipping</span>
+              <span class="val" style="color: #8a6f55; font-style: italic;">included</span>
+            </div>
+            <div class="total-row">
+              <span class="label">TOTAL DUE</span>
+              <span class="val">${currency} ${t.grand_total.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Amount in words -->
+        <div class="pv-words">
+          <div class="label">Amount in Words</div>
+          <div class="value">${escapeHtml(numberToWordsIndian(t.grand_total))} only</div>
+        </div>
+
+        ${inv.awb ? `
+          <div class="pv-words" style="margin-top: 6px;">
+            <div class="label">Tracking ID${inv.courier ? ' (' + escapeHtml(inv.courier) + ')' : ''}</div>
+            <div class="value" style="font-family: monospace; text-transform: none;">${escapeHtml(inv.awb)}</div>
+          </div>
+        ` : ''}
+
+        ${inv.is_replacement ? `<div class="replacement-stamp">Replacement Invoice — No Charge</div>` : ''}
+
+        <!-- Signatory -->
+        <div class="pv-signatory">
           <div class="for-line">For <strong>${escapeHtml(s.company)}</strong></div>
-          ${signature ? `<img class="signatory-img" src="${signature}">` : '<div style="height: 48px;"></div>'}
+          ${signature ? `<img class="signatory-img" src="${signature}">` : '<div style="height: 44px;"></div>'}
           <div class="signatory-name">${escapeHtml(s.signatory_name || 'Authorised Signatory')}</div>
         </div>
+
+        <div class="pv-thank-line">We truly appreciate your business and look forward to serving you again.</div>
+        <div class="pv-thank-script">Thank you!</div>
       </div>
 
-      <div class="pv-declaration">
-        ${escapeHtml(s.declaration)}
+      <!-- Bottom contact strip -->
+      <div class="pv-bottom-strip">
+        ${phone ? `<div class="item"><div class="ico">☎</div>${escapeHtml(phone)}</div>` : '<div></div>'}
+        ${email ? `<div class="item"><div class="ico">✉</div>${escapeHtml(email)}</div>` : '<div></div>'}
+        ${website ? `<div class="item"><div class="ico">⌬</div>${escapeHtml(website)}</div>` : '<div></div>'}
       </div>
+
+      <div class="pv-declaration">${escapeHtml(s.declaration)}</div>
     </div>
   `;
 }
-
 function formatDateForPrint(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -4848,6 +5257,61 @@ updateReplacementBanner();
 // Initialize Google Drive sync
 initGIS();
 updateSyncUI('disconnected');
+
+// PREVIEW MODE — render a sample invoice without touching Drive.
+// Activate by adding ?preview=1 to URL.
+if (new URLSearchParams(location.search).get('preview') === '1') {
+  setTimeout(() => previewInvoiceFormat(), 100);
+}
+
+function previewInvoiceFormat() {
+  // Use first existing invoice if any, else build a sample
+  let sample = state.invoices && state.invoices[0];
+  if (!sample) {
+    sample = {
+      id: 'preview',
+      order_id: 'INV-PREVIEW-001',
+      date: new Date().toISOString().slice(0, 10),
+      awb: '20894541348730',
+      courier: 'Amazon Logistics',
+      is_replacement: false,
+      consignee: {
+        name: 'Pallavi Sharma',
+        address: 'Flat no 1101, L 10 bhagyashree building cidco society sector 40 kharghar, Navi Mumbai',
+        state: 'MH',
+        pincode: '410210',
+        contact: '6280361526',
+        email: '',
+        gstin: '',
+      },
+      seller_snapshot: makeSellerSnapshot(),
+      lines: [{
+        sr: 1,
+        sku: 'HT-KB-EL-6x6',
+        product_name: 'Honey Touch Nova Double Layer King Bed',
+        hsn: '9403',
+        gst_rate: 18,
+        qty: 1,
+        unit_inclusive: 16109.10,
+        unit_taxable: 13651.78,
+        total_inclusive: 16109.10,
+        taxable: 13651.78,
+        gst_amount: 2457.32,
+        discount_pct: 0,
+      }],
+      totals: {
+        taxable: 13651.78,
+        gst: 2457.32,
+        igst: 0,
+        cgst: 1228.66,
+        sgst: 1228.66,
+        grand_total: 16109.10,
+        is_inter_state: false,
+      },
+    };
+  }
+  printInvoice(sample);
+}
 
 console.log('InvoLens v1 loaded.', {
   products: state.products.length,
