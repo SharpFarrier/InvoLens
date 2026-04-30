@@ -1260,13 +1260,32 @@
     </div>
 
     <!-- Bulk action bar — only shown when 1+ rows selected -->
-    <div id="bulkActionBar" class="hidden" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); margin-bottom: 12px;">
+    <div id="bulkActionBar" class="hidden" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); margin-bottom: 12px; flex-wrap: wrap;">
       <span style="font-weight: 500;"><span id="bulkSelectedCount">0</span> selected</span>
       <span class="text-muted" style="font-size: 12px;">·</span>
-      <button class="btn btn-sm btn-primary" onclick="bulkPrintSelected()">📄 Print as PDF</button>
+      <button class="btn btn-sm btn-primary" onclick="bulkGenerateMissingPDFs()" title="Generate PDFs for selected invoices that don't have one yet, and upload to Drive">+PDFs (missing only)</button>
+      <button class="btn btn-sm" onclick="bulkRegenerateAllPDFs()" title="Regenerate PDFs for ALL selected invoices, overwriting existing ones in Drive">Regenerate all PDFs</button>
+      <span class="text-muted" style="font-size: 12px;">·</span>
+      <button class="btn btn-sm" onclick="bulkPrintSelected()">📄 Print combined</button>
       <button class="btn btn-sm" onclick="bulkExportSelectedCSV()">Export CSV</button>
       <button class="btn btn-sm btn-danger" onclick="bulkDeleteSelected()">Delete</button>
       <button class="btn btn-sm btn-ghost" onclick="clearBulkSelection()" style="margin-left: auto;">Clear selection</button>
+    </div>
+
+    <!-- Bulk PDF progress modal -->
+    <div id="bulkPdfProgressModal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: none; align-items: center; justify-content: center;">
+      <div style="background: var(--surface); border-radius: var(--radius); padding: 24px; min-width: 420px; max-width: 90vw;">
+        <h3 style="margin: 0 0 12px;" id="bulkPdfProgressTitle">Generating PDFs…</h3>
+        <div id="bulkPdfProgressLine" style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">Preparing…</div>
+        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+          <div id="bulkPdfProgressBar" style="height: 100%; width: 0%; background: var(--accent); transition: width 0.2s;"></div>
+        </div>
+        <div id="bulkPdfProgressDetail" style="font-size: 11px; color: var(--text-faint); min-height: 16px; margin-bottom: 12px;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="btn btn-sm" id="bulkPdfCancelBtn" onclick="cancelBulkPdfGeneration()">Cancel</button>
+          <button class="btn btn-sm btn-primary hidden" id="bulkPdfDoneBtn" onclick="closeBulkPdfModal()">Done</button>
+        </div>
+      </div>
     </div>
 
     <div class="table-wrap">
@@ -3817,6 +3836,125 @@ function bulkDeleteSelected() {
   document.getElementById('historyFilterMonth').innerHTML = '<option value="">All months</option>';
   renderHistory();
   toast(`Deleted ${ids.length} invoices`, 'success');
+}
+
+// ============================================================
+// BULK PDF GENERATION (history tab)
+// ============================================================
+let _bulkPdfCancelled = false;
+
+function bulkGenerateMissingPDFs() {
+  if (!requireDrive()) return;
+  const ids = [..._selectedInvoiceIds];
+  if (ids.length === 0) return;
+  // Filter to only those without an existing PDF
+  const targetIds = ids.filter(id => {
+    const inv = state.invoices.find(x => x.id === id);
+    return inv && !inv.pdf_drive_id;
+  });
+  if (targetIds.length === 0) {
+    toast('All selected invoices already have PDFs. Use "Regenerate all PDFs" to overwrite.', 'success');
+    return;
+  }
+  const skipped = ids.length - targetIds.length;
+  if (!confirm(`Generate PDFs for ${targetIds.length} selected invoice(s)?${skipped > 0 ? `\n(${skipped} already have PDFs and will be skipped.)` : ''}\n\nThis takes ~2 seconds per invoice. Keep this tab open until done.`)) return;
+  runBulkPdfGeneration(targetIds, 'Generate missing PDFs');
+}
+
+function bulkRegenerateAllPDFs() {
+  if (!requireDrive()) return;
+  const ids = [..._selectedInvoiceIds];
+  if (ids.length === 0) return;
+  const withExisting = ids.filter(id => {
+    const inv = state.invoices.find(x => x.id === id);
+    return inv && inv.pdf_drive_id;
+  });
+  if (!confirm(`Regenerate PDFs for ALL ${ids.length} selected invoice(s)?${withExisting.length > 0 ? `\n${withExisting.length} existing PDF(s) will be OVERWRITTEN in Drive.` : ''}\n\nThis takes ~2 seconds per invoice. Keep this tab open until done.`)) return;
+  runBulkPdfGeneration(ids, 'Regenerate all PDFs');
+}
+
+async function runBulkPdfGeneration(ids, titleLabel) {
+  _bulkPdfCancelled = false;
+  const total = ids.length;
+  let done = 0;
+  let succeeded = 0;
+  let failed = 0;
+  const failures = [];
+
+  // Show modal
+  const modal = document.getElementById('bulkPdfProgressModal');
+  const titleEl = document.getElementById('bulkPdfProgressTitle');
+  const lineEl = document.getElementById('bulkPdfProgressLine');
+  const barEl = document.getElementById('bulkPdfProgressBar');
+  const detailEl = document.getElementById('bulkPdfProgressDetail');
+  const cancelBtn = document.getElementById('bulkPdfCancelBtn');
+  const doneBtn = document.getElementById('bulkPdfDoneBtn');
+  modal.style.display = 'flex';
+  modal.classList.remove('hidden');
+  titleEl.textContent = titleLabel;
+  lineEl.textContent = `Preparing ${total} invoice(s)…`;
+  barEl.style.width = '0%';
+  detailEl.textContent = '';
+  cancelBtn.classList.remove('hidden');
+  doneBtn.classList.add('hidden');
+
+  for (const id of ids) {
+    if (_bulkPdfCancelled) break;
+    const inv = state.invoices.find(x => x.id === id);
+    if (!inv) { failed++; done++; continue; }
+
+    lineEl.textContent = `(${done + 1} / ${total}) ${inv.order_id} — ${inv.consignee?.name || ''}`;
+    barEl.style.width = `${Math.round((done / total) * 100)}%`;
+
+    try {
+      await generateAndUploadInvoicePDF(inv);
+      succeeded++;
+    } catch (e) {
+      console.error(`PDF for ${inv.order_id} failed:`, e);
+      failed++;
+      failures.push(`${inv.order_id}: ${e.message || e}`);
+      detailEl.textContent = `${failed} failed so far. Last error: ${e.message || e}`;
+    }
+    done++;
+  }
+
+  // Final state
+  barEl.style.width = '100%';
+  cancelBtn.classList.add('hidden');
+  doneBtn.classList.remove('hidden');
+
+  if (_bulkPdfCancelled) {
+    titleEl.textContent = 'Cancelled';
+    lineEl.textContent = `Stopped after ${done} of ${total}. Uploaded: ${succeeded}, failed: ${failed}.`;
+  } else {
+    titleEl.textContent = 'Done';
+    lineEl.textContent = `Uploaded ${succeeded} PDFs to Drive${failed > 0 ? `, ${failed} failed` : ''}.`;
+  }
+  if (failed > 0) {
+    detailEl.textContent = 'Click "Done" to close. Failed invoices remain selected — try again if needed.';
+  } else {
+    detailEl.textContent = '';
+  }
+
+  // Refresh history so +PDF buttons turn into PDF↗ links
+  renderHistory();
+
+  toast(
+    _bulkPdfCancelled
+      ? `Cancelled. ${succeeded} uploaded, ${failed} failed.`
+      : `✓ ${succeeded} PDFs uploaded${failed > 0 ? `, ${failed} failed` : ''}`,
+    failed > 0 ? 'error' : 'success'
+  );
+}
+
+function cancelBulkPdfGeneration() {
+  _bulkPdfCancelled = true;
+}
+
+function closeBulkPdfModal() {
+  const modal = document.getElementById('bulkPdfProgressModal');
+  modal.style.display = 'none';
+  modal.classList.add('hidden');
 }
 
 function printInvoiceById(id) {
