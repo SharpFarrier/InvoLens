@@ -1048,6 +1048,33 @@
   <button class="btn btn-sm btn-primary" onclick="connectDrive()" style="margin-left: 8px;">Connect Drive</button>
 </div>
 
+<!-- AUTO-PDF CONSENT BANNER (one-time prompt) -->
+<div id="autoPdfConsentBanner" style="background: #fef3c7; border-bottom: 1px solid #b45309; padding: 12px 24px; display: none; align-items: center; gap: 14px; justify-content: center; flex-wrap: wrap;">
+  <span style="font-size: 18px;">📄</span>
+  <div style="font-size: 13px; color: #78350f;">
+    <strong>Found <span id="autoPdfMissingCount">0</span> invoices without PDFs in Drive.</strong>
+    Auto-generate them in the background while you work? You can keep using the app — a small status pill will track progress.
+  </div>
+  <div class="row" style="gap: 8px;">
+    <button class="btn btn-sm btn-primary" onclick="acceptAutoPdfConsent()">Yes, do it (and remember)</button>
+    <button class="btn btn-sm" onclick="declineAutoPdfConsent()">Not now</button>
+    <button class="btn btn-sm btn-ghost" onclick="declineAutoPdfPermanent()">Never ask</button>
+  </div>
+</div>
+
+<!-- BACKGROUND PDF GENERATION PILL (corner status) -->
+<div id="bgPdfPill" class="hidden" style="position: fixed; bottom: 16px; right: 16px; background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 999; max-width: 360px; font-size: 12px;">
+  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+    <span id="bgPdfPillIcon" style="font-size: 14px;">🔄</span>
+    <strong style="color: var(--accent);" id="bgPdfPillTitle">Generating PDFs in background</strong>
+    <button onclick="cancelBgPdfGeneration()" style="margin-left: auto; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px;" title="Cancel">✕</button>
+  </div>
+  <div id="bgPdfPillStatus" style="color: var(--text-muted); margin-bottom: 6px;">Preparing…</div>
+  <div style="height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;">
+    <div id="bgPdfPillBar" style="height: 100%; width: 0%; background: var(--accent); transition: width 0.2s;"></div>
+  </div>
+</div>
+
 <!-- TABS -->
 <div class="tabs">
   <button class="tab active" data-tab="invoice">New Invoice</button>
@@ -1790,6 +1817,8 @@ const DEFAULT_SETTINGS = {
   payment_terms: '100% advance before Dispatch',
   currency: '₹',
   declaration: 'We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.',
+  // Background PDF auto-generation: 'pending' | 'enabled' | 'never'
+  auto_generate_pdfs_consent: 'pending',
   overrides: [
     { keyword: 'mattress', hsn: '9404', gst: 12 },
   ],
@@ -3390,19 +3419,25 @@ async function regeneratePDF(id) {
 
 
 // High-level: generate PDF, upload, and store the Drive file reference on the invoice
-async function generateAndUploadInvoicePDF(invoice) {
+// `options.skipDriveSync` — when true, doesn't push the invoices.json to Drive after the PDF upload.
+// Used by bulk generation flows that batch-sync at checkpoints to save round trips.
+async function generateAndUploadInvoicePDF(invoice, options) {
+  options = options || {};
   const blob = await generateInvoicePDFBlob(invoice);
   const upload = await uploadInvoicePDFToDrive(invoice, blob);
   // Store reference on the invoice for TrackLens / future use
   invoice.pdf_drive_id = upload.id;
   invoice.pdf_filename = upload.filename;
   invoice.pdf_web_link = upload.webViewLink || '';
-  // Persist updated invoice in state
+  // Persist updated invoice in state (localStorage only for now)
   const idx = state.invoices.findIndex(x => x.id === invoice.id);
   if (idx >= 0) state.invoices[idx] = invoice;
   saveState();
   // Push the updated JSON so the pdf_drive_id is reflected in the index
-  await pushToDrive('invoices');
+  // — unless caller is batching syncs (bulk operations)
+  if (!options.skipDriveSync) {
+    await pushToDrive('invoices');
+  }
   return upload;
 }
 
@@ -3880,6 +3915,8 @@ async function runBulkPdfGeneration(ids, titleLabel) {
   let succeeded = 0;
   let failed = 0;
   const failures = [];
+  // Sync the JSON to Drive every N invoices to balance speed vs resilience
+  const SYNC_CHECKPOINT = 25;
 
   // Show modal
   const modal = document.getElementById('bulkPdfProgressModal');
@@ -3898,6 +3935,7 @@ async function runBulkPdfGeneration(ids, titleLabel) {
   cancelBtn.classList.remove('hidden');
   doneBtn.classList.add('hidden');
 
+  let pdfsSinceLastSync = 0;
   for (const id of ids) {
     if (_bulkPdfCancelled) break;
     const inv = state.invoices.find(x => x.id === id);
@@ -3907,8 +3945,19 @@ async function runBulkPdfGeneration(ids, titleLabel) {
     barEl.style.width = `${Math.round((done / total) * 100)}%`;
 
     try {
-      await generateAndUploadInvoicePDF(inv);
+      // skipDriveSync = batch the JSON sync at checkpoints instead of every invoice
+      await generateAndUploadInvoicePDF(inv, { skipDriveSync: true });
       succeeded++;
+      pdfsSinceLastSync++;
+      // Sync index every SYNC_CHECKPOINT invoices so we don't lose track if interrupted
+      if (pdfsSinceLastSync >= SYNC_CHECKPOINT) {
+        try {
+          await pushToDrive('invoices');
+          pdfsSinceLastSync = 0;
+        } catch (syncErr) {
+          console.warn('Checkpoint sync failed (will retry next checkpoint):', syncErr);
+        }
+      }
     } catch (e) {
       console.error(`PDF for ${inv.order_id} failed:`, e);
       failed++;
@@ -3916,6 +3965,11 @@ async function runBulkPdfGeneration(ids, titleLabel) {
       detailEl.textContent = `${failed} failed so far. Last error: ${e.message || e}`;
     }
     done++;
+  }
+
+  // Final sync of any pending updates
+  if (pdfsSinceLastSync > 0) {
+    try { await pushToDrive('invoices'); } catch (e) { console.error('Final sync failed:', e); }
   }
 
   // Final state
@@ -3955,6 +4009,176 @@ function closeBulkPdfModal() {
   const modal = document.getElementById('bulkPdfProgressModal');
   modal.style.display = 'none';
   modal.classList.add('hidden');
+}
+
+// ============================================================
+// BACKGROUND PDF GENERATION (auto, non-blocking, with consent)
+// ============================================================
+let _bgPdfRunning = false;
+let _bgPdfCancelled = false;
+
+function findInvoicesMissingPDF() {
+  return state.invoices.filter(inv => !inv.pdf_drive_id).map(inv => inv.id);
+}
+
+function showAutoPdfConsentBanner(count) {
+  const banner = document.getElementById('autoPdfConsentBanner');
+  if (!banner) return;
+  document.getElementById('autoPdfMissingCount').textContent = count;
+  banner.style.display = 'flex';
+}
+function hideAutoPdfConsentBanner() {
+  const banner = document.getElementById('autoPdfConsentBanner');
+  if (banner) banner.style.display = 'none';
+}
+
+function acceptAutoPdfConsent() {
+  state.settings.auto_generate_pdfs_consent = 'enabled';
+  saveState('settings');
+  hideAutoPdfConsentBanner();
+  // Start in 2 seconds — give UI a moment to settle
+  setTimeout(() => maybeStartBackgroundPdfGeneration(), 2000);
+}
+function declineAutoPdfConsent() {
+  // "Not now" — leave as 'pending' so we ask again next session
+  hideAutoPdfConsentBanner();
+}
+function declineAutoPdfPermanent() {
+  state.settings.auto_generate_pdfs_consent = 'never';
+  saveState('settings');
+  hideAutoPdfConsentBanner();
+}
+
+// Show the floating pill UI
+function showBgPill() {
+  const pill = document.getElementById('bgPdfPill');
+  if (pill) {
+    pill.classList.remove('hidden');
+    pill.style.display = 'block';
+  }
+}
+function hideBgPill() {
+  const pill = document.getElementById('bgPdfPill');
+  if (pill) {
+    pill.style.display = 'none';
+    pill.classList.add('hidden');
+  }
+}
+function updateBgPill(status, percent, icon, isError) {
+  const statusEl = document.getElementById('bgPdfPillStatus');
+  const barEl = document.getElementById('bgPdfPillBar');
+  const iconEl = document.getElementById('bgPdfPillIcon');
+  if (statusEl) statusEl.textContent = status || '';
+  if (barEl) barEl.style.width = (percent || 0) + '%';
+  if (iconEl) iconEl.textContent = icon || '🔄';
+  if (isError && barEl) barEl.style.background = 'var(--danger)';
+}
+
+function cancelBgPdfGeneration() {
+  if (_bgPdfRunning) {
+    _bgPdfCancelled = true;
+    updateBgPill('Cancelling…', 100, '⏸');
+  } else {
+    hideBgPill();
+  }
+}
+
+// Auto-trigger after Drive sync, if user has consented
+function maybeStartBackgroundPdfGeneration() {
+  if (_bgPdfRunning) return;
+  if (!drive.accessToken || !drive.invoicesFolderId) return;
+  if (state.settings.auto_generate_pdfs_consent !== 'enabled') return;
+  const ids = findInvoicesMissingPDF();
+  if (ids.length === 0) return;
+  startBackgroundPdfGeneration(ids);
+}
+
+async function startBackgroundPdfGeneration(ids) {
+  if (_bgPdfRunning) return;
+  _bgPdfRunning = true;
+  _bgPdfCancelled = false;
+  const total = ids.length;
+  let done = 0;
+  let succeeded = 0;
+  let failed = 0;
+  const SYNC_CHECKPOINT = 25;
+
+  showBgPill();
+  updateBgPill(`Starting (0 / ${total})…`, 0, '🔄');
+
+  let pdfsSinceLastSync = 0;
+  for (const id of ids) {
+    if (_bgPdfCancelled) break;
+    const inv = state.invoices.find(x => x.id === id);
+    if (!inv) { done++; continue; }
+    // Skip if a PDF appeared in the meantime (e.g. operator manually generated)
+    if (inv.pdf_drive_id) { done++; continue; }
+
+    updateBgPill(`(${done + 1} / ${total}) ${inv.order_id}`, Math.round((done / total) * 100), '🔄');
+
+    try {
+      await generateAndUploadInvoicePDF(inv, { skipDriveSync: true });
+      succeeded++;
+      pdfsSinceLastSync++;
+      if (pdfsSinceLastSync >= SYNC_CHECKPOINT) {
+        try {
+          await pushToDrive('invoices');
+          pdfsSinceLastSync = 0;
+        } catch (syncErr) {
+          console.warn('BG checkpoint sync failed:', syncErr);
+        }
+      }
+    } catch (e) {
+      console.error(`BG PDF for ${inv.order_id} failed:`, e);
+      failed++;
+    }
+    done++;
+  }
+
+  // Final sync
+  if (pdfsSinceLastSync > 0) {
+    try { await pushToDrive('invoices'); } catch (e) { console.error('BG final sync failed:', e); }
+  }
+
+  // Refresh history so +PDF buttons become PDF↗ links
+  if (typeof renderHistory === 'function') renderHistory();
+
+  _bgPdfRunning = false;
+
+  if (_bgPdfCancelled) {
+    updateBgPill(`Stopped at ${done}/${total}. ${succeeded} uploaded.`, 100, '⏸');
+    toast(`Background PDF generation cancelled. ${succeeded} uploaded.`, 'success');
+  } else if (failed > 0) {
+    updateBgPill(`Done — ${succeeded}/${total} uploaded, ${failed} failed`, 100, '⚠️', true);
+    toast(`Background PDFs done: ${succeeded} uploaded, ${failed} failed`, 'error');
+  } else {
+    updateBgPill(`✓ Done — ${succeeded} PDFs uploaded`, 100, '✓');
+    toast(`✓ Background PDFs done — ${succeeded} uploaded to Drive`, 'success');
+  }
+
+  // Auto-hide pill after 5s on success
+  if (!_bgPdfCancelled && failed === 0) {
+    setTimeout(() => hideBgPill(), 5000);
+  }
+}
+
+// Called from the Drive connect / load flow after Drive is ready
+function checkAutoPdfBacklog() {
+  if (!drive.accessToken || !drive.invoicesFolderId) return;
+  const consent = state.settings.auto_generate_pdfs_consent;
+  if (consent === 'never') return;
+  const missing = findInvoicesMissingPDF();
+  if (missing.length === 0) {
+    hideAutoPdfConsentBanner();
+    return;
+  }
+  if (consent === 'enabled') {
+    // Already opted in — start silently after a short delay
+    setTimeout(() => maybeStartBackgroundPdfGeneration(), 30000);
+  } else if (consent === 'pending') {
+    // First time — show the consent banner
+    showAutoPdfConsentBanner(missing.length);
+  }
 }
 
 function printInvoiceById(id) {
@@ -4340,6 +4564,8 @@ async function bootstrapDriveSession(opts = {}) {
     drive.lastSyncError = null;
     updateSyncUI('connected');
     if (!silent) toast(`Connected${drive.userEmail && drive.userEmail !== 'Connected' ? ' as ' + drive.userEmail : ''}`, 'success');
+    // After Drive is fully ready, check if we should auto-generate missing PDFs in the background
+    setTimeout(() => checkAutoPdfBacklog(), 2000);
   } catch (e) {
     // Real failure — discoverFiles or pull failed. Token is bad.
     console.warn('Drive bootstrap failed:', e.message || e);
@@ -4401,6 +4627,8 @@ async function syncNow() {
     drive.lastSync = new Date();
     updateSyncUI('connected');
     toast('Synced — local + Drive merged', 'success');
+    // Check if there are invoices missing PDFs and offer/auto-start background generation
+    setTimeout(() => checkAutoPdfBacklog(), 1000);
   } catch (e) {
     drive.lastSyncError = e.message;
     updateSyncUI('error', e.message);
