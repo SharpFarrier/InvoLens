@@ -691,7 +691,7 @@
     transform: rotate(-3deg);
   }
 
-  /* Items table */
+  /* Items table — cell grid format */
   #printView .items-table {
     width: 100%;
     border-collapse: separate;
@@ -700,6 +700,7 @@
     border-radius: 6px;
     overflow: hidden;
     box-shadow: 0 1px 0 rgba(184, 136, 56, 0.15);
+    border: 1px solid #d4b889;
   }
   #printView .items-table thead tr {
     background: #c89548;
@@ -713,6 +714,10 @@
     color: #fff;
     text-align: left;
     background: #c89548;
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
+  }
+  #printView .items-table th:last-child {
+    border-right: none;
   }
   #printView .items-table tbody tr {
     background: #fdfbf7;
@@ -720,12 +725,25 @@
   #printView .items-table tbody tr:nth-child(even) {
     background: #f9efde;
   }
+  #printView .items-table tbody tr {
+    border-bottom: 1px solid #e3cfa6;
+  }
+  #printView .items-table tbody tr:last-child {
+    border-bottom: none;
+  }
   #printView .items-table td {
     padding: 11px 10px;
     vertical-align: top;
     font-size: 11px;
     color: #3d2817;
-    border: none;
+    border-right: 1px solid #e3cfa6;
+    border-bottom: 1px solid #e3cfa6;
+  }
+  #printView .items-table td:last-child {
+    border-right: none;
+  }
+  #printView .items-table tbody tr:last-child td {
+    border-bottom: none;
   }
   #printView .items-table td.num,
   #printView .items-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -1088,6 +1106,11 @@
                 <option value="Flipkart Logistics"></option>
               </datalist>
             </label>
+            <label>
+              <div class="label-text">Promise Date <span class="text-faint" style="font-weight: 400;">(internal — for TrackLens)</span></div>
+              <input type="date" id="inv_promise_date">
+              <div class="help">Marketplace-promised delivery date. Not printed on the invoice.</div>
+            </label>
             <label class="full">
               <div class="row">
                 <input type="checkbox" id="inv_is_replacement" onchange="updateReplacementBanner()" style="width: auto; margin-right: 8px;">
@@ -1260,6 +1283,7 @@
             <th>GST</th>
             <th>AWB</th>
             <th>Courier</th>
+            <th>Promise Date</th>
             <th></th>
           </tr>
         </thead>
@@ -2958,6 +2982,7 @@ function saveAndPrintInvoice() {
     date: document.getElementById('inv_date').value,
     awb: document.getElementById('inv_awb').value.trim(),
     courier: document.getElementById('inv_courier').value.trim(),
+    promise_date: document.getElementById('inv_promise_date').value || '',
     is_replacement: isReplacement,
     consignee,
     seller_snapshot: makeSellerSnapshot(),
@@ -3066,6 +3091,7 @@ function resetInvoiceForm() {
   document.getElementById('inv_date').value = todayStr();
   document.getElementById('inv_awb').value = '';
   document.getElementById('inv_courier').value = '';
+  document.getElementById('inv_promise_date').value = '';
   document.getElementById('inv_is_replacement').checked = false;
   document.getElementById('inv_cust_name').value = '';
   document.getElementById('inv_cust_address').value = '';
@@ -3090,6 +3116,7 @@ function loadInvoiceForEdit(id) {
   document.getElementById('inv_date').value = inv.date;
   document.getElementById('inv_awb').value = inv.awb || '';
   document.getElementById('inv_courier').value = inv.courier || '';
+  document.getElementById('inv_promise_date').value = inv.promise_date || '';
   document.getElementById('inv_is_replacement').checked = !!inv.is_replacement;
   document.getElementById('inv_cust_name').value = inv.consignee.name || '';
   document.getElementById('inv_cust_address').value = inv.consignee.address || '';
@@ -3673,7 +3700,7 @@ function renderHistory() {
 
   tbody.innerHTML = '';
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding: 30px; color: var(--text-faint);">${state.invoices.length === 0 ? 'No invoices yet — create your first one in the New Invoice tab' : 'No invoices match your search'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding: 30px; color: var(--text-faint);">${state.invoices.length === 0 ? 'No invoices yet — create your first one in the New Invoice tab' : 'No invoices match your search'}</td></tr>`;
     return;
   }
 
@@ -3692,6 +3719,7 @@ function renderHistory() {
       <td class="mono">${fmtCurrency((inv.totals?.gst) || 0)}</td>
       <td class="mono" style="font-size: 11px;">${escapeHtml(inv.awb || '—')}</td>
       <td style="font-size: 11px;">${escapeHtml(inv.courier || '—')}</td>
+      <td style="font-size: 11px;">${inv.promise_date ? formatDateShort(inv.promise_date) : '—'}</td>
       <td>
         <button class="btn btn-sm" onclick="printInvoiceById('${escapeAttr(inv.id)}')">Print</button>
         <button class="btn btn-sm" onclick="loadInvoiceForEdit('${escapeAttr(inv.id)}')">Edit</button>
@@ -3818,7 +3846,7 @@ function exportInvoicesArray(invoices, filename) {
   const headers = [
     'Invoice No', 'Order Date', 'Consignee', 'Address', 'State', 'Pincode', 'Contact', 'Email', 'Buyer GSTIN',
     'SKU', 'Product Name', 'HSN', 'GST Rate', 'Qty', 'Unit Price (Incl)', 'Discount %',
-    'Taxable', 'IGST', 'CGST', 'SGST', 'Grand Total', 'AWB', 'Courier', 'Replacement'
+    'Taxable', 'IGST', 'CGST', 'SGST', 'Grand Total', 'AWB', 'Courier', 'Promise Date', 'Replacement'
   ];
   const rows = [];
   invoices.forEach(inv => {
@@ -3831,7 +3859,7 @@ function exportInvoicesArray(invoices, filename) {
         L.taxable, inv.totals?.is_inter_state ? L.gst_amount : 0,
         inv.totals?.is_inter_state ? 0 : round2(L.gst_amount / 2),
         inv.totals?.is_inter_state ? 0 : round2(L.gst_amount / 2),
-        L.total_inclusive, inv.awb, inv.courier || '', inv.is_replacement ? 'Yes' : 'No'
+        L.total_inclusive, inv.awb, inv.courier || '', inv.promise_date || '', inv.is_replacement ? 'Yes' : 'No'
       ]);
     });
   });
@@ -4809,6 +4837,14 @@ function parseBulkRow(row, idx) {
     courier = detectCourierFromAWB(awbResult.value);
   }
 
+  // Promise Date — marketplace-promised delivery date (used by TrackLens, not printed on invoice)
+  const promiseRaw = findCol(row, [
+    'Promise Date', 'Promised Date', 'Promised Delivery Date', 'Expected Delivery Date',
+    'Estimated Delivery Date', 'EDD', 'Delivery Date', 'Promised By', 'Latest Delivery Date',
+    'Latest Ship Date'
+  ]);
+  const promiseDate = promiseRaw ? normalizeDate(promiseRaw) : '';
+
   const discountPct = parseFloat(findCol(row, ['Discount Percentage', 'Discount %', 'Discount'])) || 0;
   const productNameFromFile = findCol(row, ['Product Name', 'Product', 'Item Name', 'Description']) || '';
 
@@ -4848,6 +4884,7 @@ function parseBulkRow(row, idx) {
       discount_pct: discountPct,
       awb: awbResult.value,
       courier,
+      promise_date: promiseDate,
     }
   };
 }
@@ -4954,6 +4991,7 @@ async function handleBulkImport(event) {
           <td class="mono">${fmtCurrency(p.parsed.grand_total)}</td>
           <td class="mono" style="font-size: 11px;">${escapeHtml(p.parsed.awb || '—')}</td>
           <td style="font-size: 11px;">${escapeHtml(p.parsed.courier || '—')}</td>
+          <td style="font-size: 11px;">${escapeHtml(p.parsed.promise_date || '—')}</td>
           <td>${statusPill}</td>
         </tr>
       `;
@@ -5000,7 +5038,7 @@ async function handleBulkImport(event) {
         <div class="table-wrap" style="max-height: 280px; overflow: auto;">
           <table class="data-table">
             <thead><tr>
-              <th>#</th><th>Order No</th><th>Consignee</th><th>State</th><th>SKU</th><th>Total</th><th>AWB</th><th>Courier</th><th>Status</th>
+              <th>#</th><th>Order No</th><th>Consignee</th><th>State</th><th>SKU</th><th>Total</th><th>AWB</th><th>Courier</th><th>Promise Date</th><th>Status</th>
             </tr></thead>
             <tbody>${previewRows}</tbody>
           </table>
@@ -5101,6 +5139,7 @@ async function confirmBulkImport() {
         date: p.date,
         awb: p.awb,
         courier: p.courier || '',
+        promise_date: p.promise_date || '',
         is_replacement: false,
         consignee,
         seller_snapshot: makeSellerSnapshot(),
@@ -5224,13 +5263,14 @@ function downloadBulkTemplate() {
     'Order No', 'Invoice Date', 'Consignee', 'Address', 'Contact',
     'SKU', 'Product Name', 'Qty', 'Unit Price', 'Discount Percentage',
     'Taxable', 'Tax', 'Shipping', 'Taxable.1', 'Tax.1', 'Tax.2',
-    'IGST', 'SGST', 'CGST', 'State', 'AWB', 'Courier'
+    'IGST', 'SGST', 'CGST', 'State', 'AWB', 'Courier', 'Promise Date'
   ];
   const sample = [
     '402-7796310-8585127', '2025-11-30', 'Durga Balachandar',
     '#32, 4th Cross Road, Dollar Town Layout, BENGALURU KARNATAKA 560100',
     '8695336120', 'HT-KBM-EL-6x6', 'Honey Touch Nova King Size Bed', 1, 11699, 0,
-    9914.41, 1784.59, '', '', '', 1784.59, 1784.59, '', '', 'KARNATAKA', '20894533765991', 'Amazon Logistics'
+    9914.41, 1784.59, '', '', '', 1784.59, 1784.59, '', '', 'KARNATAKA',
+    '20894533765991', 'Amazon Logistics', '2025-12-05'
   ];
   const csv = [headers, sample]
     .map(row => row.map(cell => {
