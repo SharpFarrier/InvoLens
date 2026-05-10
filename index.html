@@ -1290,11 +1290,11 @@
     <div id="bulkActionBar" class="hidden" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius); margin-bottom: 12px; flex-wrap: wrap;">
       <span style="font-weight: 500;"><span id="bulkSelectedCount">0</span> selected</span>
       <span class="text-muted" style="font-size: 12px;">·</span>
-      <button class="btn btn-sm btn-primary" onclick="bulkGenerateMissingPDFs()" title="Generate PDFs for selected invoices that don't have one yet, and upload to Drive">+PDFs (missing only)</button>
-      <button class="btn btn-sm" onclick="bulkRegenerateAllPDFs()" title="Regenerate PDFs for ALL selected invoices, overwriting existing ones in Drive">Regenerate all PDFs</button>
-      <span class="text-muted" style="font-size: 12px;">·</span>
-      <button class="btn btn-sm" onclick="bulkPrintSelected()">📄 Print combined</button>
+      <button class="btn btn-sm btn-primary" onclick="bulkPrintSelected()" title="Render selected invoices into a single combined PDF (fast — uses browser Save as PDF)">📥 Download combined PDF</button>
       <button class="btn btn-sm" onclick="bulkExportSelectedCSV()">Export CSV</button>
+      <span class="text-muted" style="font-size: 12px;">·</span>
+      <button class="btn btn-sm" onclick="bulkGenerateMissingPDFs()" title="Generate per-invoice PDFs for selected invoices that don't have one in Drive yet (slower — for TrackLens)">+PDFs to Drive (missing only)</button>
+      <button class="btn btn-sm" onclick="bulkRegenerateAllPDFs()" title="Regenerate per-invoice PDFs for ALL selected, overwriting existing ones in Drive">Regenerate Drive PDFs</button>
       <button class="btn btn-sm btn-danger" onclick="bulkDeleteSelected()">Delete</button>
       <button class="btn btn-sm btn-ghost" onclick="clearBulkSelection()" style="margin-left: auto;">Clear selection</button>
     </div>
@@ -3441,6 +3441,130 @@ async function generateAndUploadInvoicePDF(invoice, options) {
   return upload;
 }
 
+// Pipelined bulk runner: while invoice N is uploading, start rendering invoice N+1.
+// Render is CPU-bound and uses the shared #printView element (so only one render at a time),
+// but upload is network-bound and can overlap with the next render. Net effect: ~25% faster
+// than fully sequential.
+//
+// Timing model (per invoice):
+//   render N    [CPU,  ~1.5s] → start upload N (don't await)
+//   render N+1  [CPU,  ~1.5s] runs concurrently with upload N [net, ~0.5s]
+//   await upload N (already done by now)  → start upload N+1
+//   ...
+//
+// Caller provides:
+//   ids:            array of invoice IDs to process
+//   onProgress:     function(done, total, currentInvoice, currentLabel)
+//   shouldCancel:   function() — return true to abort cleanly
+//   syncCheckpoint: integer (default 25) — push invoices.json to Drive every N completed
+//
+// Returns: { succeeded, failed, cancelled, failures: [{order_id, error}] }
+async function pipelinedBulkPdfRun({ ids, onProgress, shouldCancel, syncCheckpoint }) {
+  syncCheckpoint = syncCheckpoint || 25;
+  let succeeded = 0;
+  let failed = 0;
+  const failures = [];
+  let pdfsSinceLastSync = 0;
+  // The currently-in-flight upload — we drain this BEFORE starting the next upload,
+  // but render of N+1 has already started by then (overlapping with upload N).
+  let pendingUpload = null; // { invoice, uploadPromise }
+
+  async function drainPending() {
+    if (!pendingUpload) return;
+    const { invoice, uploadPromise } = pendingUpload;
+    pendingUpload = null;
+    try {
+      const upload = await uploadPromise;
+      invoice.pdf_drive_id = upload.id;
+      invoice.pdf_filename = upload.filename;
+      invoice.pdf_web_link = upload.webViewLink || '';
+      const idx = state.invoices.findIndex(x => x.id === invoice.id);
+      if (idx >= 0) state.invoices[idx] = invoice;
+      saveState();
+      succeeded++;
+      pdfsSinceLastSync++;
+    } catch (e) {
+      console.error(`PDF upload for ${invoice.order_id} failed:`, e);
+      failed++;
+      failures.push({ order_id: invoice.order_id, error: e.message || String(e) });
+    }
+  }
+
+  for (let i = 0; i < ids.length; i++) {
+    if (shouldCancel && shouldCancel()) break;
+    const id = ids[i];
+    const inv = state.invoices.find(x => x.id === id);
+    if (!inv) {
+      failed++;
+      failures.push({ order_id: id, error: 'invoice not found in state' });
+      continue;
+    }
+
+    // Skip if PDF already exists (race-condition safety)
+    if (inv.pdf_drive_id) {
+      if (onProgress) onProgress(i + 1, ids.length, inv, 'skipped (already has PDF)');
+      continue;
+    }
+
+    if (onProgress) onProgress(i + 1, ids.length, inv, 'rendering');
+
+    // RENDER (this blocks the main thread; meanwhile, the previous upload N-1 is overlapping
+    // its network round trip with this render)
+    let blob;
+    try {
+      blob = await generateInvoicePDFBlob(inv);
+    } catch (e) {
+      console.error(`PDF render for ${inv.order_id} failed:`, e);
+      failed++;
+      failures.push({ order_id: inv.order_id, error: 'render: ' + (e.message || String(e)) });
+      // Still drain the previous upload so its result lands in state in order
+      await drainPending();
+      continue;
+    }
+
+    // Now drain the PREVIOUS upload (often already done because render was slower than upload).
+    // This finalizes inv N-1's pdf_drive_id in state.
+    await drainPending();
+
+    // Start the upload for THIS invoice WITHOUT awaiting — let it run concurrently
+    // with the next iteration's render.
+    if (onProgress) onProgress(i + 1, ids.length, inv, 'uploading');
+    const uploadPromise = uploadInvoicePDFToDrive(inv, blob);
+    pendingUpload = { invoice: inv, uploadPromise };
+
+    // Periodic JSON sync checkpoint
+    if (pdfsSinceLastSync >= syncCheckpoint) {
+      // Drain so the latest pdf_drive_id is in state before pushing
+      await drainPending();
+      try {
+        await pushToDrive('invoices');
+        pdfsSinceLastSync = 0;
+      } catch (syncErr) {
+        console.warn('Checkpoint sync failed (will retry next checkpoint):', syncErr);
+      }
+    }
+  }
+
+  // Drain final pending upload
+  await drainPending();
+
+  // Final JSON sync if there are pending updates
+  if (pdfsSinceLastSync > 0) {
+    try {
+      await pushToDrive('invoices');
+    } catch (e) {
+      console.error('Final invoices.json sync failed:', e);
+    }
+  }
+
+  return {
+    succeeded,
+    failed,
+    cancelled: !!(shouldCancel && shouldCancel()),
+    failures,
+  };
+}
+
 
 function renderPrintHTML(inv) {
   const s = inv.seller_snapshot || state.settings;
@@ -3911,12 +4035,6 @@ function bulkRegenerateAllPDFs() {
 async function runBulkPdfGeneration(ids, titleLabel) {
   _bulkPdfCancelled = false;
   const total = ids.length;
-  let done = 0;
-  let succeeded = 0;
-  let failed = 0;
-  const failures = [];
-  // Sync the JSON to Drive every N invoices to balance speed vs resilience
-  const SYNC_CHECKPOINT = 25;
 
   // Show modal
   const modal = document.getElementById('bulkPdfProgressModal');
@@ -3935,42 +4053,31 @@ async function runBulkPdfGeneration(ids, titleLabel) {
   cancelBtn.classList.remove('hidden');
   doneBtn.classList.add('hidden');
 
-  let pdfsSinceLastSync = 0;
-  for (const id of ids) {
-    if (_bulkPdfCancelled) break;
-    const inv = state.invoices.find(x => x.id === id);
-    if (!inv) { failed++; done++; continue; }
+  // Tab close warning while generation runs
+  const beforeUnloadHandler = (e) => {
+    e.preventDefault();
+    e.returnValue = 'PDF generation in progress. Closing this tab will stop it.';
+    return e.returnValue;
+  };
+  window.addEventListener('beforeunload', beforeUnloadHandler);
 
-    lineEl.textContent = `(${done + 1} / ${total}) ${inv.order_id} — ${inv.consignee?.name || ''}`;
-    barEl.style.width = `${Math.round((done / total) * 100)}%`;
+  let lastFailureMsg = '';
+  const result = await pipelinedBulkPdfRun({
+    ids,
+    shouldCancel: () => _bulkPdfCancelled,
+    onProgress: (i, total, inv, label) => {
+      lineEl.textContent = `(${i} / ${total}) ${inv.order_id} — ${inv.consignee?.name || ''} (${label})`;
+      barEl.style.width = `${Math.round(((i - 1) / total) * 100)}%`;
+    },
+  });
 
-    try {
-      // skipDriveSync = batch the JSON sync at checkpoints instead of every invoice
-      await generateAndUploadInvoicePDF(inv, { skipDriveSync: true });
-      succeeded++;
-      pdfsSinceLastSync++;
-      // Sync index every SYNC_CHECKPOINT invoices so we don't lose track if interrupted
-      if (pdfsSinceLastSync >= SYNC_CHECKPOINT) {
-        try {
-          await pushToDrive('invoices');
-          pdfsSinceLastSync = 0;
-        } catch (syncErr) {
-          console.warn('Checkpoint sync failed (will retry next checkpoint):', syncErr);
-        }
-      }
-    } catch (e) {
-      console.error(`PDF for ${inv.order_id} failed:`, e);
-      failed++;
-      failures.push(`${inv.order_id}: ${e.message || e}`);
-      detailEl.textContent = `${failed} failed so far. Last error: ${e.message || e}`;
-    }
-    done++;
+  // Show last error if any
+  if (result.failed > 0 && result.failures.length > 0) {
+    const lastErr = result.failures[result.failures.length - 1];
+    detailEl.textContent = `${result.failed} failed. Last error: ${lastErr.error}`;
   }
 
-  // Final sync of any pending updates
-  if (pdfsSinceLastSync > 0) {
-    try { await pushToDrive('invoices'); } catch (e) { console.error('Final sync failed:', e); }
-  }
+  window.removeEventListener('beforeunload', beforeUnloadHandler);
 
   // Final state
   barEl.style.width = '100%';
@@ -3979,15 +4086,13 @@ async function runBulkPdfGeneration(ids, titleLabel) {
 
   if (_bulkPdfCancelled) {
     titleEl.textContent = 'Cancelled';
-    lineEl.textContent = `Stopped after ${done} of ${total}. Uploaded: ${succeeded}, failed: ${failed}.`;
+    lineEl.textContent = `Stopped. Uploaded: ${result.succeeded}, failed: ${result.failed}.`;
   } else {
     titleEl.textContent = 'Done';
-    lineEl.textContent = `Uploaded ${succeeded} PDFs to Drive${failed > 0 ? `, ${failed} failed` : ''}.`;
+    lineEl.textContent = `Uploaded ${result.succeeded} PDFs to Drive${result.failed > 0 ? `, ${result.failed} failed` : ''}.`;
   }
-  if (failed > 0) {
-    detailEl.textContent = 'Click "Done" to close. Failed invoices remain selected — try again if needed.';
-  } else {
-    detailEl.textContent = '';
+  if (result.failed > 0) {
+    detailEl.textContent = (detailEl.textContent || '') + ' Click "Done" to close. Failed invoices remain selected — try again if needed.';
   }
 
   // Refresh history so +PDF buttons turn into PDF↗ links
@@ -3995,9 +4100,9 @@ async function runBulkPdfGeneration(ids, titleLabel) {
 
   toast(
     _bulkPdfCancelled
-      ? `Cancelled. ${succeeded} uploaded, ${failed} failed.`
-      : `✓ ${succeeded} PDFs uploaded${failed > 0 ? `, ${failed} failed` : ''}`,
-    failed > 0 ? 'error' : 'success'
+      ? `Cancelled. ${result.succeeded} uploaded, ${result.failed} failed.`
+      : `✓ ${result.succeeded} PDFs uploaded${result.failed > 0 ? `, ${result.failed} failed` : ''}`,
+    result.failed > 0 ? 'error' : 'success'
   );
 }
 
@@ -4098,47 +4203,27 @@ async function startBackgroundPdfGeneration(ids) {
   _bgPdfRunning = true;
   _bgPdfCancelled = false;
   const total = ids.length;
-  let done = 0;
-  let succeeded = 0;
-  let failed = 0;
-  const SYNC_CHECKPOINT = 25;
 
   showBgPill();
   updateBgPill(`Starting (0 / ${total})…`, 0, '🔄');
 
-  let pdfsSinceLastSync = 0;
-  for (const id of ids) {
-    if (_bgPdfCancelled) break;
-    const inv = state.invoices.find(x => x.id === id);
-    if (!inv) { done++; continue; }
-    // Skip if a PDF appeared in the meantime (e.g. operator manually generated)
-    if (inv.pdf_drive_id) { done++; continue; }
+  // Tab close warning while generation runs
+  const beforeUnloadHandler = (e) => {
+    e.preventDefault();
+    e.returnValue = 'PDF generation in progress in the background. Closing this tab will pause it (it resumes next time you open InvoLens).';
+    return e.returnValue;
+  };
+  window.addEventListener('beforeunload', beforeUnloadHandler);
 
-    updateBgPill(`(${done + 1} / ${total}) ${inv.order_id}`, Math.round((done / total) * 100), '🔄');
+  const result = await pipelinedBulkPdfRun({
+    ids,
+    shouldCancel: () => _bgPdfCancelled,
+    onProgress: (i, total, inv, label) => {
+      updateBgPill(`(${i} / ${total}) ${inv.order_id}`, Math.round(((i - 1) / total) * 100), '🔄');
+    },
+  });
 
-    try {
-      await generateAndUploadInvoicePDF(inv, { skipDriveSync: true });
-      succeeded++;
-      pdfsSinceLastSync++;
-      if (pdfsSinceLastSync >= SYNC_CHECKPOINT) {
-        try {
-          await pushToDrive('invoices');
-          pdfsSinceLastSync = 0;
-        } catch (syncErr) {
-          console.warn('BG checkpoint sync failed:', syncErr);
-        }
-      }
-    } catch (e) {
-      console.error(`BG PDF for ${inv.order_id} failed:`, e);
-      failed++;
-    }
-    done++;
-  }
-
-  // Final sync
-  if (pdfsSinceLastSync > 0) {
-    try { await pushToDrive('invoices'); } catch (e) { console.error('BG final sync failed:', e); }
-  }
+  window.removeEventListener('beforeunload', beforeUnloadHandler);
 
   // Refresh history so +PDF buttons become PDF↗ links
   if (typeof renderHistory === 'function') renderHistory();
@@ -4146,18 +4231,18 @@ async function startBackgroundPdfGeneration(ids) {
   _bgPdfRunning = false;
 
   if (_bgPdfCancelled) {
-    updateBgPill(`Stopped at ${done}/${total}. ${succeeded} uploaded.`, 100, '⏸');
-    toast(`Background PDF generation cancelled. ${succeeded} uploaded.`, 'success');
-  } else if (failed > 0) {
-    updateBgPill(`Done — ${succeeded}/${total} uploaded, ${failed} failed`, 100, '⚠️', true);
-    toast(`Background PDFs done: ${succeeded} uploaded, ${failed} failed`, 'error');
+    updateBgPill(`Stopped. ${result.succeeded} uploaded.`, 100, '⏸');
+    toast(`Background PDF generation cancelled. ${result.succeeded} uploaded.`, 'success');
+  } else if (result.failed > 0) {
+    updateBgPill(`Done — ${result.succeeded}/${total} uploaded, ${result.failed} failed`, 100, '⚠️', true);
+    toast(`Background PDFs done: ${result.succeeded} uploaded, ${result.failed} failed`, 'error');
   } else {
-    updateBgPill(`✓ Done — ${succeeded} PDFs uploaded`, 100, '✓');
-    toast(`✓ Background PDFs done — ${succeeded} uploaded to Drive`, 'success');
+    updateBgPill(`✓ Done — ${result.succeeded} PDFs uploaded`, 100, '✓');
+    toast(`✓ Background PDFs done — ${result.succeeded} uploaded to Drive`, 'success');
   }
 
   // Auto-hide pill after 5s on success
-  if (!_bgPdfCancelled && failed === 0) {
+  if (!_bgPdfCancelled && result.failed === 0) {
     setTimeout(() => hideBgPill(), 5000);
   }
 }
@@ -4166,6 +4251,11 @@ async function startBackgroundPdfGeneration(ids) {
 function checkAutoPdfBacklog() {
   if (!drive.accessToken || !drive.invoicesFolderId) return;
   const consent = state.settings.auto_generate_pdfs_consent;
+  // PAUSED: auto-background PDF generation is currently disabled because it slows
+  // dispatch operations. Per-invoice Drive PDFs are only generated when the operator
+  // explicitly clicks the bulk "+PDFs to Drive" button. Combined PDF download still works.
+  return;
+  // (legacy behavior preserved below in case we re-enable)
   if (consent === 'never') return;
   const missing = findInvoicesMissingPDF();
   if (missing.length === 0) {
@@ -4173,10 +4263,8 @@ function checkAutoPdfBacklog() {
     return;
   }
   if (consent === 'enabled') {
-    // Already opted in — start silently after a short delay
     setTimeout(() => maybeStartBackgroundPdfGeneration(), 30000);
   } else if (consent === 'pending') {
-    // First time — show the consent banner
     showAutoPdfConsentBanner(missing.length);
   }
 }
@@ -5397,8 +5485,8 @@ async function handleBulkImport(event) {
         </div>
         <div style="margin-bottom: 12px;">
           <label style="font-size: 12px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-            <input type="checkbox" id="bulkGeneratePdfs" checked>
-            Also generate & upload PDFs to Drive (~2s per invoice)
+            <input type="checkbox" id="bulkGeneratePdfs">
+            Also generate & upload individual PDFs to Drive (~2s per invoice — only needed for TrackLens / per-invoice archive)
           </label>
         </div>
         <div class="table-wrap" style="max-height: 280px; overflow: auto;">
