@@ -3183,6 +3183,264 @@ function printMultipleInvoices(invoices) {
 // PDF GENERATION + DRIVE UPLOAD
 // ============================================================
 
+function renderPrintHTML(inv) {
+  const s = inv.seller_snapshot || state.settings;
+  const t = inv.totals;
+  const live = state.settings;
+  // Logo / signature: live settings only (snapshot doesn't carry images)
+  const logo = live.logo_b64 || s.logo_b64 || '';
+  const signature = live.signature_b64 || s.signature_b64 || '';
+  // For brand metadata: prefer snapshot (frozen at invoice time), fall back to live for legacy invoices
+  const brandName = s.brand_name || live.brand_name || 'Honey Touch';
+  const tagline = s.tagline !== undefined ? s.tagline : (live.tagline || '');
+  const phone = s.phone || live.phone || '';
+  const website = s.website || live.website || '';
+  const email = s.email || live.email || '';
+  const bankHolder = s.bank_holder || live.bank_holder || '';
+  const bankName = s.bank_name || live.bank_name || '';
+  const bankAccount = s.bank_account || live.bank_account || '';
+  const bankIfsc = s.bank_ifsc || live.bank_ifsc || '';
+  const bankUpi = s.bank_upi || live.bank_upi || '';
+
+  const itemRows = inv.lines.map(L => {
+    return `
+      <tr>
+        <td class="ctr">${L.sr}</td>
+        <td>
+          <div class="product-name">${escapeHtml(L.product_name)}</div>
+          <div class="product-meta">SKU ${escapeHtml(L.sku)} · HSN ${escapeHtml(L.hsn)}</div>
+        </td>
+        <td class="ctr">${L.qty}</td>
+        <td class="num">${L.unit_inclusive.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+        <td class="num">${(L.unit_taxable * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+        <td class="num">${(L.unit_inclusive * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const taxLines = t.is_inter_state
+    ? `<div class="row"><span class="label">IGST</span><span class="val">${t.igst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>`
+    : `<div class="row"><span class="label">CGST</span><span class="val">${t.cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>
+       <div class="row"><span class="label">SGST</span><span class="val">${t.sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>`;
+
+  const buyerStateName = stateName(inv.consignee.state);
+  const sellerStateName = stateName(s.state);
+  const currency = s.currency || '₹';
+
+  const hasBank = !!(bankHolder || bankName || bankAccount || bankIfsc || bankUpi);
+
+  // Decorative honeycomb pattern (SVG)
+  const honeycombSVG = `
+    <svg class="corner-deco tr" viewBox="0 0 110 110">
+      ${[
+        [55, 18], [82, 18], [27, 38], [55, 38], [82, 38], [27, 58], [55, 58], [82, 58],
+      ].map(([cx, cy]) => `
+        <polygon points="${cx},${cy-12} ${cx+10},${cy-6} ${cx+10},${cy+6} ${cx},${cy+12} ${cx-10},${cy+6} ${cx-10},${cy-6}"
+                 fill="none" stroke="#c89548" stroke-width="1.4"/>`).join('')}
+    </svg>
+    <svg class="corner-deco br" viewBox="0 0 110 110">
+      ${[
+        [27, 52], [55, 52], [82, 52], [27, 72], [55, 72], [82, 72], [27, 92], [55, 92],
+      ].map(([cx, cy]) => `
+        <polygon points="${cx},${cy-12} ${cx+10},${cy-6} ${cx+10},${cy+6} ${cx},${cy+12} ${cx-10},${cy+6} ${cx-10},${cy-6}"
+                 fill="none" stroke="#c89548" stroke-width="1.4"/>`).join('')}
+    </svg>
+  `;
+
+  // Bee-in-hexagon corner mark (SVG)
+  const beeMarkSVG = `
+    <svg class="corner-deco bl-bee" viewBox="0 0 60 60">
+      <polygon points="30,4 52,16 52,44 30,56 8,44 8,16" fill="none" stroke="#c89548" stroke-width="1.6"/>
+      <ellipse cx="30" cy="32" rx="9" ry="6" fill="#c89548"/>
+      <line x1="22" y1="29" x2="38" y2="29" stroke="#fdfbf7" stroke-width="1.2"/>
+      <line x1="22" y1="34" x2="38" y2="34" stroke="#fdfbf7" stroke-width="1.2"/>
+      <ellipse cx="22" cy="27" rx="5" ry="3" fill="#fdfbf7" opacity="0.85"/>
+      <ellipse cx="38" cy="27" rx="5" ry="3" fill="#fdfbf7" opacity="0.85"/>
+    </svg>
+  `;
+
+  // Brand block: logo if uploaded, else typographic wordmark
+  const brandBlock = logo
+    ? `<img src="${logo}" class="pv-logo" alt="${escapeHtml(brandName)}">`
+    : `<div class="wordmark">${escapeHtml(brandName)}</div>`;
+
+  // Bank details rows (only show fields with values)
+  const bankRows = hasBank ? `
+    <div class="bank-grid">
+      ${bankName ? `<div class="lbl">Bank Name</div><div class="val">${escapeHtml(bankName)}</div>` : ''}
+      ${bankHolder ? `<div class="lbl">Account Name</div><div class="val">${escapeHtml(bankHolder)}</div>` : ''}
+      ${bankAccount ? `<div class="lbl">Account No.</div><div class="val">${escapeHtml(bankAccount)}</div>` : ''}
+      ${bankIfsc ? `<div class="lbl">IFSC Code</div><div class="val">${escapeHtml(bankIfsc)}</div>` : ''}
+      ${bankUpi ? `<div class="lbl">UPI ID</div><div class="val">${escapeHtml(bankUpi)}</div>` : ''}
+    </div>
+  ` : '';
+
+  return `
+    <div class="print-page">
+      ${honeycombSVG}
+      ${beeMarkSVG}
+
+      <div class="pv-content">
+        <!-- Three-column header -->
+        <div class="pv-top">
+          <div class="pv-brand">
+            ${brandBlock}
+            ${tagline ? `<div class="tagline">${escapeHtml(tagline)}</div>` : ''}
+          </div>
+
+          <div class="pv-contact">
+            <div class="row">
+              <div class="icon">⌖</div>
+              <div class="text">
+                <strong>${escapeHtml(s.company)}</strong>
+                ${escapeHtml(s.address)}
+              </div>
+            </div>
+            ${phone ? `
+            <div class="row">
+              <div class="icon">☎</div>
+              <div class="text">${escapeHtml(phone)}</div>
+            </div>` : ''}
+            ${email ? `
+            <div class="row">
+              <div class="icon">✉</div>
+              <div class="text">${escapeHtml(email)}</div>
+            </div>` : ''}
+            ${website ? `
+            <div class="row">
+              <div class="icon">⌬</div>
+              <div class="text">${escapeHtml(website)}</div>
+            </div>` : ''}
+          </div>
+
+          <div class="pv-doctype">
+            <div class="doc-word">${inv.is_replacement ? 'REPLACEMENT' : 'INVOICE'}</div>
+            <div class="doc-divider"></div>
+            <div class="meta">
+              <div class="label">Invoice No.</div><div class="colon">:</div><div class="val">${escapeHtml(inv.order_id)}</div>
+              <div class="label">Invoice Date</div><div class="colon">:</div><div class="val">${formatDateForPrint(inv.date)}</div>
+              <div class="label">Seller GSTIN</div><div class="colon">:</div><div class="val">${escapeHtml(s.gstin)}</div>
+              <div class="label">Place of Supply</div><div class="colon">:</div><div class="val">${escapeHtml(buyerStateName)}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bill To + Thank you -->
+        <div class="pv-billrow">
+          <div class="bill-card">
+            <div class="bill-icon">👤</div>
+            <div class="bill-content">
+              <div class="label">BILL TO</div>
+              <div class="name">${escapeHtml(inv.consignee.name)}</div>
+              <div class="address-line">${escapeHtml(inv.consignee.address)}${inv.consignee.pincode ? ' — ' + escapeHtml(inv.consignee.pincode) : ''}</div>
+              <div class="meta-line"><span class="lbl">State:</span> ${escapeHtml(buyerStateName)} ${inv.consignee.contact ? '&nbsp;&nbsp;<span class="lbl">Contact:</span> ' + escapeHtml(inv.consignee.contact) : ''}</div>
+              ${inv.consignee.email ? `<div class="meta-line"><span class="lbl">Email:</span> ${escapeHtml(inv.consignee.email)}</div>` : ''}
+              ${inv.consignee.gstin ? `<div class="meta-line"><span class="lbl">Buyer GSTIN:</span> ${escapeHtml(inv.consignee.gstin)}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="pv-thanks">
+            <div class="script">Thank you for your business!</div>
+          </div>
+        </div>
+
+        <!-- Items -->
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th class="ctr" style="width: 5%;">No.</th>
+              <th>Description</th>
+              <th class="ctr" style="width: 7%;">Qty</th>
+              <th class="num" style="width: 13%;">Unit Price</th>
+              <th class="num" style="width: 14%;">Taxable</th>
+              <th class="num" style="width: 14%;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemRows}
+          </tbody>
+        </table>
+
+        <!-- Lower row: payment + bank (left), totals (right) -->
+        <div class="pv-lower">
+          <div class="pay-section">
+            <div class="section-h"><div class="ico">✉</div>PAYMENT METHODS</div>
+            <div class="pay-line">${escapeHtml(s.payment_terms || '100% advance before Dispatch')}</div>
+            <div class="pay-methods">
+              <div class="pm"><div class="pm-ico">⇄</div>Bank Transfer</div>
+              <div class="pm"><div class="pm-ico">⌬</div>UPI</div>
+              <div class="pm"><div class="pm-ico">▭</div>Credit / Debit Card</div>
+            </div>
+
+            ${hasBank ? `
+              <div class="section-h" style="margin-top: 4px;"><div class="ico">▭</div>BANK DETAILS</div>
+              ${bankRows}
+            ` : ''}
+          </div>
+
+          <div class="totals-card">
+            <div class="row">
+              <span class="label">Taxable Value</span>
+              <span class="val">${currency} ${t.taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+            </div>
+            ${taxLines}
+            <div class="row">
+              <span class="label">Shipping</span>
+              <span class="val" style="color: #8a6f55; font-style: italic;">included</span>
+            </div>
+            <div class="total-row">
+              <span class="label">TOTAL DUE</span>
+              <span class="val">${currency} ${t.grand_total.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Amount in words -->
+        <div class="pv-words">
+          <div class="label">Amount in Words</div>
+          <div class="value">${escapeHtml(numberToWordsIndian(t.grand_total))} only</div>
+        </div>
+
+        ${inv.awb ? `
+          <div class="pv-words" style="margin-top: 6px;">
+            <div class="label">Tracking ID${inv.courier ? ' (' + escapeHtml(inv.courier) + ')' : ''}</div>
+            <div class="value" style="font-family: monospace; text-transform: none;">${escapeHtml(inv.awb)}</div>
+          </div>
+        ` : ''}
+
+        ${inv.is_replacement ? `<div class="replacement-stamp">Replacement Invoice — No Charge</div>` : ''}
+
+        <!-- Signatory -->
+        <div class="pv-signatory">
+          <div class="for-line">For <strong>${escapeHtml(s.company)}</strong></div>
+          ${signature ? `<img class="signatory-img" src="${signature}">` : '<div style="height: 44px;"></div>'}
+          <div class="signatory-name">${escapeHtml(s.signatory_name || 'Authorised Signatory')}</div>
+        </div>
+
+        <div class="pv-thank-line">We truly appreciate your business and look forward to serving you again.</div>
+        <div class="pv-thank-script">Thank you!</div>
+      </div>
+
+      <!-- Bottom contact strip -->
+      <div class="pv-bottom-strip">
+        ${phone ? `<div class="item"><div class="ico">☎</div>${escapeHtml(phone)}</div>` : '<div></div>'}
+        ${email ? `<div class="item"><div class="ico">✉</div>${escapeHtml(email)}</div>` : '<div></div>'}
+        ${website ? `<div class="item"><div class="ico">⌬</div>${escapeHtml(website)}</div>` : '<div></div>'}
+      </div>
+
+      <div class="pv-declaration">${escapeHtml(s.declaration)}</div>
+    </div>
+  `;
+}
+
+function formatDateForPrint(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 // Sanitize a string for use as a filename
 function sanitizeFilename(name) {
   return String(name || 'invoice')
