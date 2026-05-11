@@ -1048,33 +1048,6 @@
   <button class="btn btn-sm btn-primary" onclick="connectDrive()" style="margin-left: 8px;">Connect Drive</button>
 </div>
 
-<!-- AUTO-PDF CONSENT BANNER (one-time prompt) -->
-<div id="autoPdfConsentBanner" style="background: #fef3c7; border-bottom: 1px solid #b45309; padding: 12px 24px; display: none; align-items: center; gap: 14px; justify-content: center; flex-wrap: wrap;">
-  <span style="font-size: 18px;">📄</span>
-  <div style="font-size: 13px; color: #78350f;">
-    <strong>Found <span id="autoPdfMissingCount">0</span> invoices without PDFs in Drive.</strong>
-    Auto-generate them in the background while you work? You can keep using the app — a small status pill will track progress.
-  </div>
-  <div class="row" style="gap: 8px;">
-    <button class="btn btn-sm btn-primary" onclick="acceptAutoPdfConsent()">Yes, do it (and remember)</button>
-    <button class="btn btn-sm" onclick="declineAutoPdfConsent()">Not now</button>
-    <button class="btn btn-sm btn-ghost" onclick="declineAutoPdfPermanent()">Never ask</button>
-  </div>
-</div>
-
-<!-- BACKGROUND PDF GENERATION PILL (corner status) -->
-<div id="bgPdfPill" class="hidden" style="position: fixed; bottom: 16px; right: 16px; background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 999; max-width: 360px; font-size: 12px;">
-  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-    <span id="bgPdfPillIcon" style="font-size: 14px;">🔄</span>
-    <strong style="color: var(--accent);" id="bgPdfPillTitle">Generating PDFs in background</strong>
-    <button onclick="cancelBgPdfGeneration()" style="margin-left: auto; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px;" title="Cancel">✕</button>
-  </div>
-  <div id="bgPdfPillStatus" style="color: var(--text-muted); margin-bottom: 6px;">Preparing…</div>
-  <div style="height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;">
-    <div id="bgPdfPillBar" style="height: 100%; width: 0%; background: var(--accent); transition: width 0.2s;"></div>
-  </div>
-</div>
-
 <!-- TABS -->
 <div class="tabs">
   <button class="tab active" data-tab="invoice">New Invoice</button>
@@ -1293,29 +1266,12 @@
       <button class="btn btn-sm btn-primary" onclick="bulkPrintSelected()" title="Render selected invoices into a single combined PDF (fast — uses browser Save as PDF)">📥 Download combined PDF</button>
       <button class="btn btn-sm" onclick="bulkExportSelectedCSV()">Export CSV</button>
       <span class="text-muted" style="font-size: 12px;">·</span>
-      <button class="btn btn-sm" onclick="bulkGenerateMissingPDFs()" title="Generate per-invoice PDFs for selected invoices that don't have one in Drive yet (slower — for TrackLens)">+PDFs to Drive (missing only)</button>
-      <button class="btn btn-sm" onclick="bulkRegenerateAllPDFs()" title="Regenerate per-invoice PDFs for ALL selected, overwriting existing ones in Drive">Regenerate Drive PDFs</button>
       <button class="btn btn-sm btn-danger" onclick="bulkDeleteSelected()">Delete</button>
       <button class="btn btn-sm btn-ghost" onclick="clearBulkSelection()" style="margin-left: auto;">Clear selection</button>
     </div>
 
     <!-- Bulk PDF progress modal -->
-    <div id="bulkPdfProgressModal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: none; align-items: center; justify-content: center;">
-      <div style="background: var(--surface); border-radius: var(--radius); padding: 24px; min-width: 420px; max-width: 90vw;">
-        <h3 style="margin: 0 0 12px;" id="bulkPdfProgressTitle">Generating PDFs…</h3>
-        <div id="bulkPdfProgressLine" style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">Preparing…</div>
-        <div style="height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-          <div id="bulkPdfProgressBar" style="height: 100%; width: 0%; background: var(--accent); transition: width 0.2s;"></div>
-        </div>
-        <div id="bulkPdfProgressDetail" style="font-size: 11px; color: var(--text-faint); min-height: 16px; margin-bottom: 12px;"></div>
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-          <button class="btn btn-sm" id="bulkPdfCancelBtn" onclick="cancelBulkPdfGeneration()">Cancel</button>
-          <button class="btn btn-sm btn-primary hidden" id="bulkPdfDoneBtn" onclick="closeBulkPdfModal()">Done</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="table-wrap">
+<div class="table-wrap">
       <table class="data-table" id="historyTable">
         <thead>
           <tr>
@@ -3441,391 +3397,6 @@ async function generateAndUploadInvoicePDF(invoice, options) {
   return upload;
 }
 
-// Pipelined bulk runner: while invoice N is uploading, start rendering invoice N+1.
-// Render is CPU-bound and uses the shared #printView element (so only one render at a time),
-// but upload is network-bound and can overlap with the next render. Net effect: ~25% faster
-// than fully sequential.
-//
-// Timing model (per invoice):
-//   render N    [CPU,  ~1.5s] → start upload N (don't await)
-//   render N+1  [CPU,  ~1.5s] runs concurrently with upload N [net, ~0.5s]
-//   await upload N (already done by now)  → start upload N+1
-//   ...
-//
-// Caller provides:
-//   ids:            array of invoice IDs to process
-//   onProgress:     function(done, total, currentInvoice, currentLabel)
-//   shouldCancel:   function() — return true to abort cleanly
-//   syncCheckpoint: integer (default 25) — push invoices.json to Drive every N completed
-//
-// Returns: { succeeded, failed, cancelled, failures: [{order_id, error}] }
-async function pipelinedBulkPdfRun({ ids, onProgress, shouldCancel, syncCheckpoint }) {
-  syncCheckpoint = syncCheckpoint || 25;
-  let succeeded = 0;
-  let failed = 0;
-  const failures = [];
-  let pdfsSinceLastSync = 0;
-  // The currently-in-flight upload — we drain this BEFORE starting the next upload,
-  // but render of N+1 has already started by then (overlapping with upload N).
-  let pendingUpload = null; // { invoice, uploadPromise }
-
-  async function drainPending() {
-    if (!pendingUpload) return;
-    const { invoice, uploadPromise } = pendingUpload;
-    pendingUpload = null;
-    try {
-      const upload = await uploadPromise;
-      invoice.pdf_drive_id = upload.id;
-      invoice.pdf_filename = upload.filename;
-      invoice.pdf_web_link = upload.webViewLink || '';
-      const idx = state.invoices.findIndex(x => x.id === invoice.id);
-      if (idx >= 0) state.invoices[idx] = invoice;
-      saveState();
-      succeeded++;
-      pdfsSinceLastSync++;
-    } catch (e) {
-      console.error(`PDF upload for ${invoice.order_id} failed:`, e);
-      failed++;
-      failures.push({ order_id: invoice.order_id, error: e.message || String(e) });
-    }
-  }
-
-  for (let i = 0; i < ids.length; i++) {
-    if (shouldCancel && shouldCancel()) break;
-    const id = ids[i];
-    const inv = state.invoices.find(x => x.id === id);
-    if (!inv) {
-      failed++;
-      failures.push({ order_id: id, error: 'invoice not found in state' });
-      continue;
-    }
-
-    // Skip if PDF already exists (race-condition safety)
-    if (inv.pdf_drive_id) {
-      if (onProgress) onProgress(i + 1, ids.length, inv, 'skipped (already has PDF)');
-      continue;
-    }
-
-    if (onProgress) onProgress(i + 1, ids.length, inv, 'rendering');
-
-    // RENDER (this blocks the main thread; meanwhile, the previous upload N-1 is overlapping
-    // its network round trip with this render)
-    let blob;
-    try {
-      blob = await generateInvoicePDFBlob(inv);
-    } catch (e) {
-      console.error(`PDF render for ${inv.order_id} failed:`, e);
-      failed++;
-      failures.push({ order_id: inv.order_id, error: 'render: ' + (e.message || String(e)) });
-      // Still drain the previous upload so its result lands in state in order
-      await drainPending();
-      continue;
-    }
-
-    // Now drain the PREVIOUS upload (often already done because render was slower than upload).
-    // This finalizes inv N-1's pdf_drive_id in state.
-    await drainPending();
-
-    // Start the upload for THIS invoice WITHOUT awaiting — let it run concurrently
-    // with the next iteration's render.
-    if (onProgress) onProgress(i + 1, ids.length, inv, 'uploading');
-    const uploadPromise = uploadInvoicePDFToDrive(inv, blob);
-    pendingUpload = { invoice: inv, uploadPromise };
-
-    // Periodic JSON sync checkpoint
-    if (pdfsSinceLastSync >= syncCheckpoint) {
-      // Drain so the latest pdf_drive_id is in state before pushing
-      await drainPending();
-      try {
-        await pushToDrive('invoices');
-        pdfsSinceLastSync = 0;
-      } catch (syncErr) {
-        console.warn('Checkpoint sync failed (will retry next checkpoint):', syncErr);
-      }
-    }
-  }
-
-  // Drain final pending upload
-  await drainPending();
-
-  // Final JSON sync if there are pending updates
-  if (pdfsSinceLastSync > 0) {
-    try {
-      await pushToDrive('invoices');
-    } catch (e) {
-      console.error('Final invoices.json sync failed:', e);
-    }
-  }
-
-  return {
-    succeeded,
-    failed,
-    cancelled: !!(shouldCancel && shouldCancel()),
-    failures,
-  };
-}
-
-
-function renderPrintHTML(inv) {
-  const s = inv.seller_snapshot || state.settings;
-  const t = inv.totals;
-  const live = state.settings;
-  // Logo / signature: live settings only (snapshot doesn't carry images)
-  const logo = live.logo_b64 || s.logo_b64 || '';
-  const signature = live.signature_b64 || s.signature_b64 || '';
-  // For brand metadata: prefer snapshot (frozen at invoice time), fall back to live for legacy invoices
-  const brandName = s.brand_name || live.brand_name || 'Honey Touch';
-  const tagline = s.tagline !== undefined ? s.tagline : (live.tagline || '');
-  const phone = s.phone || live.phone || '';
-  const website = s.website || live.website || '';
-  const email = s.email || live.email || '';
-  const bankHolder = s.bank_holder || live.bank_holder || '';
-  const bankName = s.bank_name || live.bank_name || '';
-  const bankAccount = s.bank_account || live.bank_account || '';
-  const bankIfsc = s.bank_ifsc || live.bank_ifsc || '';
-  const bankUpi = s.bank_upi || live.bank_upi || '';
-
-  const itemRows = inv.lines.map(L => {
-    return `
-      <tr>
-        <td class="ctr">${L.sr}</td>
-        <td>
-          <div class="product-name">${escapeHtml(L.product_name)}</div>
-          <div class="product-meta">SKU ${escapeHtml(L.sku)} · HSN ${escapeHtml(L.hsn)}</div>
-        </td>
-        <td class="ctr">${L.qty}</td>
-        <td class="num">${L.unit_inclusive.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-        <td class="num">${(L.unit_taxable * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-        <td class="num">${(L.unit_inclusive * L.qty).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-      </tr>
-    `;
-  }).join('');
-
-  const taxLines = t.is_inter_state
-    ? `<div class="row"><span class="label">IGST</span><span class="val">${t.igst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>`
-    : `<div class="row"><span class="label">CGST</span><span class="val">${t.cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>
-       <div class="row"><span class="label">SGST</span><span class="val">${t.sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></div>`;
-
-  const buyerStateName = stateName(inv.consignee.state);
-  const sellerStateName = stateName(s.state);
-  const currency = s.currency || '₹';
-
-  const hasBank = !!(bankHolder || bankName || bankAccount || bankIfsc || bankUpi);
-
-  // Decorative honeycomb pattern (SVG)
-  const honeycombSVG = `
-    <svg class="corner-deco tr" viewBox="0 0 110 110">
-      ${[
-        [55, 18], [82, 18], [27, 38], [55, 38], [82, 38], [27, 58], [55, 58], [82, 58],
-      ].map(([cx, cy]) => `
-        <polygon points="${cx},${cy-12} ${cx+10},${cy-6} ${cx+10},${cy+6} ${cx},${cy+12} ${cx-10},${cy+6} ${cx-10},${cy-6}"
-                 fill="none" stroke="#c89548" stroke-width="1.4"/>`).join('')}
-    </svg>
-    <svg class="corner-deco br" viewBox="0 0 110 110">
-      ${[
-        [27, 52], [55, 52], [82, 52], [27, 72], [55, 72], [82, 72], [27, 92], [55, 92],
-      ].map(([cx, cy]) => `
-        <polygon points="${cx},${cy-12} ${cx+10},${cy-6} ${cx+10},${cy+6} ${cx},${cy+12} ${cx-10},${cy+6} ${cx-10},${cy-6}"
-                 fill="none" stroke="#c89548" stroke-width="1.4"/>`).join('')}
-    </svg>
-  `;
-
-  // Bee-in-hexagon corner mark (SVG)
-  const beeMarkSVG = `
-    <svg class="corner-deco bl-bee" viewBox="0 0 60 60">
-      <polygon points="30,4 52,16 52,44 30,56 8,44 8,16" fill="none" stroke="#c89548" stroke-width="1.6"/>
-      <ellipse cx="30" cy="32" rx="9" ry="6" fill="#c89548"/>
-      <line x1="22" y1="29" x2="38" y2="29" stroke="#fdfbf7" stroke-width="1.2"/>
-      <line x1="22" y1="34" x2="38" y2="34" stroke="#fdfbf7" stroke-width="1.2"/>
-      <ellipse cx="22" cy="27" rx="5" ry="3" fill="#fdfbf7" opacity="0.85"/>
-      <ellipse cx="38" cy="27" rx="5" ry="3" fill="#fdfbf7" opacity="0.85"/>
-    </svg>
-  `;
-
-  // Brand block: logo if uploaded, else typographic wordmark
-  const brandBlock = logo
-    ? `<img src="${logo}" class="pv-logo" alt="${escapeHtml(brandName)}">`
-    : `<div class="wordmark">${escapeHtml(brandName)}</div>`;
-
-  // Bank details rows (only show fields with values)
-  const bankRows = hasBank ? `
-    <div class="bank-grid">
-      ${bankName ? `<div class="lbl">Bank Name</div><div class="val">${escapeHtml(bankName)}</div>` : ''}
-      ${bankHolder ? `<div class="lbl">Account Name</div><div class="val">${escapeHtml(bankHolder)}</div>` : ''}
-      ${bankAccount ? `<div class="lbl">Account No.</div><div class="val">${escapeHtml(bankAccount)}</div>` : ''}
-      ${bankIfsc ? `<div class="lbl">IFSC Code</div><div class="val">${escapeHtml(bankIfsc)}</div>` : ''}
-      ${bankUpi ? `<div class="lbl">UPI ID</div><div class="val">${escapeHtml(bankUpi)}</div>` : ''}
-    </div>
-  ` : '';
-
-  return `
-    <div class="print-page">
-      ${honeycombSVG}
-      ${beeMarkSVG}
-
-      <div class="pv-content">
-        <!-- Three-column header -->
-        <div class="pv-top">
-          <div class="pv-brand">
-            ${brandBlock}
-            ${tagline ? `<div class="tagline">${escapeHtml(tagline)}</div>` : ''}
-          </div>
-
-          <div class="pv-contact">
-            <div class="row">
-              <div class="icon">⌖</div>
-              <div class="text">
-                <strong>${escapeHtml(s.company)}</strong>
-                ${escapeHtml(s.address)}
-              </div>
-            </div>
-            ${phone ? `
-            <div class="row">
-              <div class="icon">☎</div>
-              <div class="text">${escapeHtml(phone)}</div>
-            </div>` : ''}
-            ${email ? `
-            <div class="row">
-              <div class="icon">✉</div>
-              <div class="text">${escapeHtml(email)}</div>
-            </div>` : ''}
-            ${website ? `
-            <div class="row">
-              <div class="icon">⌬</div>
-              <div class="text">${escapeHtml(website)}</div>
-            </div>` : ''}
-          </div>
-
-          <div class="pv-doctype">
-            <div class="doc-word">${inv.is_replacement ? 'REPLACEMENT' : 'INVOICE'}</div>
-            <div class="doc-divider"></div>
-            <div class="meta">
-              <div class="label">Invoice No.</div><div class="colon">:</div><div class="val">${escapeHtml(inv.order_id)}</div>
-              <div class="label">Invoice Date</div><div class="colon">:</div><div class="val">${formatDateForPrint(inv.date)}</div>
-              <div class="label">Seller GSTIN</div><div class="colon">:</div><div class="val">${escapeHtml(s.gstin)}</div>
-              <div class="label">Place of Supply</div><div class="colon">:</div><div class="val">${escapeHtml(buyerStateName)}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bill To + Thank you -->
-        <div class="pv-billrow">
-          <div class="bill-card">
-            <div class="bill-icon">👤</div>
-            <div class="bill-content">
-              <div class="label">BILL TO</div>
-              <div class="name">${escapeHtml(inv.consignee.name)}</div>
-              <div class="address-line">${escapeHtml(inv.consignee.address)}${inv.consignee.pincode ? ' — ' + escapeHtml(inv.consignee.pincode) : ''}</div>
-              <div class="meta-line"><span class="lbl">State:</span> ${escapeHtml(buyerStateName)} ${inv.consignee.contact ? '&nbsp;&nbsp;<span class="lbl">Contact:</span> ' + escapeHtml(inv.consignee.contact) : ''}</div>
-              ${inv.consignee.email ? `<div class="meta-line"><span class="lbl">Email:</span> ${escapeHtml(inv.consignee.email)}</div>` : ''}
-              ${inv.consignee.gstin ? `<div class="meta-line"><span class="lbl">Buyer GSTIN:</span> ${escapeHtml(inv.consignee.gstin)}</div>` : ''}
-            </div>
-          </div>
-
-          <div class="pv-thanks">
-            <div class="script">Thank you for your business!</div>
-          </div>
-        </div>
-
-        <!-- Items -->
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th class="ctr" style="width: 5%;">No.</th>
-              <th>Description</th>
-              <th class="ctr" style="width: 7%;">Qty</th>
-              <th class="num" style="width: 13%;">Unit Price</th>
-              <th class="num" style="width: 14%;">Taxable</th>
-              <th class="num" style="width: 14%;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemRows}
-          </tbody>
-        </table>
-
-        <!-- Lower row: payment + bank (left), totals (right) -->
-        <div class="pv-lower">
-          <div class="pay-section">
-            <div class="section-h"><div class="ico">✉</div>PAYMENT METHODS</div>
-            <div class="pay-line">${escapeHtml(s.payment_terms || '100% advance before Dispatch')}</div>
-            <div class="pay-methods">
-              <div class="pm"><div class="pm-ico">⇄</div>Bank Transfer</div>
-              <div class="pm"><div class="pm-ico">⌬</div>UPI</div>
-              <div class="pm"><div class="pm-ico">▭</div>Credit / Debit Card</div>
-            </div>
-
-            ${hasBank ? `
-              <div class="section-h" style="margin-top: 4px;"><div class="ico">▭</div>BANK DETAILS</div>
-              ${bankRows}
-            ` : ''}
-          </div>
-
-          <div class="totals-card">
-            <div class="row">
-              <span class="label">Taxable Value</span>
-              <span class="val">${currency} ${t.taxable.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-            </div>
-            ${taxLines}
-            <div class="row">
-              <span class="label">Shipping</span>
-              <span class="val" style="color: #8a6f55; font-style: italic;">included</span>
-            </div>
-            <div class="total-row">
-              <span class="label">TOTAL DUE</span>
-              <span class="val">${currency} ${t.grand_total.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Amount in words -->
-        <div class="pv-words">
-          <div class="label">Amount in Words</div>
-          <div class="value">${escapeHtml(numberToWordsIndian(t.grand_total))} only</div>
-        </div>
-
-        ${inv.awb ? `
-          <div class="pv-words" style="margin-top: 6px;">
-            <div class="label">Tracking ID${inv.courier ? ' (' + escapeHtml(inv.courier) + ')' : ''}</div>
-            <div class="value" style="font-family: monospace; text-transform: none;">${escapeHtml(inv.awb)}</div>
-          </div>
-        ` : ''}
-
-        ${inv.is_replacement ? `<div class="replacement-stamp">Replacement Invoice — No Charge</div>` : ''}
-
-        <!-- Signatory -->
-        <div class="pv-signatory">
-          <div class="for-line">For <strong>${escapeHtml(s.company)}</strong></div>
-          ${signature ? `<img class="signatory-img" src="${signature}">` : '<div style="height: 44px;"></div>'}
-          <div class="signatory-name">${escapeHtml(s.signatory_name || 'Authorised Signatory')}</div>
-        </div>
-
-        <div class="pv-thank-line">We truly appreciate your business and look forward to serving you again.</div>
-        <div class="pv-thank-script">Thank you!</div>
-      </div>
-
-      <!-- Bottom contact strip -->
-      <div class="pv-bottom-strip">
-        ${phone ? `<div class="item"><div class="ico">☎</div>${escapeHtml(phone)}</div>` : '<div></div>'}
-        ${email ? `<div class="item"><div class="ico">✉</div>${escapeHtml(email)}</div>` : '<div></div>'}
-        ${website ? `<div class="item"><div class="ico">⌬</div>${escapeHtml(website)}</div>` : '<div></div>'}
-      </div>
-
-      <div class="pv-declaration">${escapeHtml(s.declaration)}</div>
-    </div>
-  `;
-}
-function formatDateForPrint(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-// ============================================================
-// HISTORY TAB
-// ============================================================
 // Bulk selection state
 const _selectedInvoiceIds = new Set();
 
@@ -4001,273 +3572,6 @@ function bulkDeleteSelected() {
 // BULK PDF GENERATION (history tab)
 // ============================================================
 let _bulkPdfCancelled = false;
-
-function bulkGenerateMissingPDFs() {
-  if (!requireDrive()) return;
-  const ids = [..._selectedInvoiceIds];
-  if (ids.length === 0) return;
-  // Filter to only those without an existing PDF
-  const targetIds = ids.filter(id => {
-    const inv = state.invoices.find(x => x.id === id);
-    return inv && !inv.pdf_drive_id;
-  });
-  if (targetIds.length === 0) {
-    toast('All selected invoices already have PDFs. Use "Regenerate all PDFs" to overwrite.', 'success');
-    return;
-  }
-  const skipped = ids.length - targetIds.length;
-  if (!confirm(`Generate PDFs for ${targetIds.length} selected invoice(s)?${skipped > 0 ? `\n(${skipped} already have PDFs and will be skipped.)` : ''}\n\nThis takes ~2 seconds per invoice. Keep this tab open until done.`)) return;
-  runBulkPdfGeneration(targetIds, 'Generate missing PDFs');
-}
-
-function bulkRegenerateAllPDFs() {
-  if (!requireDrive()) return;
-  const ids = [..._selectedInvoiceIds];
-  if (ids.length === 0) return;
-  const withExisting = ids.filter(id => {
-    const inv = state.invoices.find(x => x.id === id);
-    return inv && inv.pdf_drive_id;
-  });
-  if (!confirm(`Regenerate PDFs for ALL ${ids.length} selected invoice(s)?${withExisting.length > 0 ? `\n${withExisting.length} existing PDF(s) will be OVERWRITTEN in Drive.` : ''}\n\nThis takes ~2 seconds per invoice. Keep this tab open until done.`)) return;
-  runBulkPdfGeneration(ids, 'Regenerate all PDFs');
-}
-
-async function runBulkPdfGeneration(ids, titleLabel) {
-  _bulkPdfCancelled = false;
-  const total = ids.length;
-
-  // Show modal
-  const modal = document.getElementById('bulkPdfProgressModal');
-  const titleEl = document.getElementById('bulkPdfProgressTitle');
-  const lineEl = document.getElementById('bulkPdfProgressLine');
-  const barEl = document.getElementById('bulkPdfProgressBar');
-  const detailEl = document.getElementById('bulkPdfProgressDetail');
-  const cancelBtn = document.getElementById('bulkPdfCancelBtn');
-  const doneBtn = document.getElementById('bulkPdfDoneBtn');
-  modal.style.display = 'flex';
-  modal.classList.remove('hidden');
-  titleEl.textContent = titleLabel;
-  lineEl.textContent = `Preparing ${total} invoice(s)…`;
-  barEl.style.width = '0%';
-  detailEl.textContent = '';
-  cancelBtn.classList.remove('hidden');
-  doneBtn.classList.add('hidden');
-
-  // Tab close warning while generation runs
-  const beforeUnloadHandler = (e) => {
-    e.preventDefault();
-    e.returnValue = 'PDF generation in progress. Closing this tab will stop it.';
-    return e.returnValue;
-  };
-  window.addEventListener('beforeunload', beforeUnloadHandler);
-
-  let lastFailureMsg = '';
-  const result = await pipelinedBulkPdfRun({
-    ids,
-    shouldCancel: () => _bulkPdfCancelled,
-    onProgress: (i, total, inv, label) => {
-      lineEl.textContent = `(${i} / ${total}) ${inv.order_id} — ${inv.consignee?.name || ''} (${label})`;
-      barEl.style.width = `${Math.round(((i - 1) / total) * 100)}%`;
-    },
-  });
-
-  // Show last error if any
-  if (result.failed > 0 && result.failures.length > 0) {
-    const lastErr = result.failures[result.failures.length - 1];
-    detailEl.textContent = `${result.failed} failed. Last error: ${lastErr.error}`;
-  }
-
-  window.removeEventListener('beforeunload', beforeUnloadHandler);
-
-  // Final state
-  barEl.style.width = '100%';
-  cancelBtn.classList.add('hidden');
-  doneBtn.classList.remove('hidden');
-
-  if (_bulkPdfCancelled) {
-    titleEl.textContent = 'Cancelled';
-    lineEl.textContent = `Stopped. Uploaded: ${result.succeeded}, failed: ${result.failed}.`;
-  } else {
-    titleEl.textContent = 'Done';
-    lineEl.textContent = `Uploaded ${result.succeeded} PDFs to Drive${result.failed > 0 ? `, ${result.failed} failed` : ''}.`;
-  }
-  if (result.failed > 0) {
-    detailEl.textContent = (detailEl.textContent || '') + ' Click "Done" to close. Failed invoices remain selected — try again if needed.';
-  }
-
-  // Refresh history so +PDF buttons turn into PDF↗ links
-  renderHistory();
-
-  toast(
-    _bulkPdfCancelled
-      ? `Cancelled. ${result.succeeded} uploaded, ${result.failed} failed.`
-      : `✓ ${result.succeeded} PDFs uploaded${result.failed > 0 ? `, ${result.failed} failed` : ''}`,
-    result.failed > 0 ? 'error' : 'success'
-  );
-}
-
-function cancelBulkPdfGeneration() {
-  _bulkPdfCancelled = true;
-}
-
-function closeBulkPdfModal() {
-  const modal = document.getElementById('bulkPdfProgressModal');
-  modal.style.display = 'none';
-  modal.classList.add('hidden');
-}
-
-// ============================================================
-// BACKGROUND PDF GENERATION (auto, non-blocking, with consent)
-// ============================================================
-let _bgPdfRunning = false;
-let _bgPdfCancelled = false;
-
-function findInvoicesMissingPDF() {
-  return state.invoices.filter(inv => !inv.pdf_drive_id).map(inv => inv.id);
-}
-
-function showAutoPdfConsentBanner(count) {
-  const banner = document.getElementById('autoPdfConsentBanner');
-  if (!banner) return;
-  document.getElementById('autoPdfMissingCount').textContent = count;
-  banner.style.display = 'flex';
-}
-function hideAutoPdfConsentBanner() {
-  const banner = document.getElementById('autoPdfConsentBanner');
-  if (banner) banner.style.display = 'none';
-}
-
-function acceptAutoPdfConsent() {
-  state.settings.auto_generate_pdfs_consent = 'enabled';
-  saveState('settings');
-  hideAutoPdfConsentBanner();
-  // Start in 2 seconds — give UI a moment to settle
-  setTimeout(() => maybeStartBackgroundPdfGeneration(), 2000);
-}
-function declineAutoPdfConsent() {
-  // "Not now" — leave as 'pending' so we ask again next session
-  hideAutoPdfConsentBanner();
-}
-function declineAutoPdfPermanent() {
-  state.settings.auto_generate_pdfs_consent = 'never';
-  saveState('settings');
-  hideAutoPdfConsentBanner();
-}
-
-// Show the floating pill UI
-function showBgPill() {
-  const pill = document.getElementById('bgPdfPill');
-  if (pill) {
-    pill.classList.remove('hidden');
-    pill.style.display = 'block';
-  }
-}
-function hideBgPill() {
-  const pill = document.getElementById('bgPdfPill');
-  if (pill) {
-    pill.style.display = 'none';
-    pill.classList.add('hidden');
-  }
-}
-function updateBgPill(status, percent, icon, isError) {
-  const statusEl = document.getElementById('bgPdfPillStatus');
-  const barEl = document.getElementById('bgPdfPillBar');
-  const iconEl = document.getElementById('bgPdfPillIcon');
-  if (statusEl) statusEl.textContent = status || '';
-  if (barEl) barEl.style.width = (percent || 0) + '%';
-  if (iconEl) iconEl.textContent = icon || '🔄';
-  if (isError && barEl) barEl.style.background = 'var(--danger)';
-}
-
-function cancelBgPdfGeneration() {
-  if (_bgPdfRunning) {
-    _bgPdfCancelled = true;
-    updateBgPill('Cancelling…', 100, '⏸');
-  } else {
-    hideBgPill();
-  }
-}
-
-// Auto-trigger after Drive sync, if user has consented
-function maybeStartBackgroundPdfGeneration() {
-  if (_bgPdfRunning) return;
-  if (!drive.accessToken || !drive.invoicesFolderId) return;
-  if (state.settings.auto_generate_pdfs_consent !== 'enabled') return;
-  const ids = findInvoicesMissingPDF();
-  if (ids.length === 0) return;
-  startBackgroundPdfGeneration(ids);
-}
-
-async function startBackgroundPdfGeneration(ids) {
-  if (_bgPdfRunning) return;
-  _bgPdfRunning = true;
-  _bgPdfCancelled = false;
-  const total = ids.length;
-
-  showBgPill();
-  updateBgPill(`Starting (0 / ${total})…`, 0, '🔄');
-
-  // Tab close warning while generation runs
-  const beforeUnloadHandler = (e) => {
-    e.preventDefault();
-    e.returnValue = 'PDF generation in progress in the background. Closing this tab will pause it (it resumes next time you open InvoLens).';
-    return e.returnValue;
-  };
-  window.addEventListener('beforeunload', beforeUnloadHandler);
-
-  const result = await pipelinedBulkPdfRun({
-    ids,
-    shouldCancel: () => _bgPdfCancelled,
-    onProgress: (i, total, inv, label) => {
-      updateBgPill(`(${i} / ${total}) ${inv.order_id}`, Math.round(((i - 1) / total) * 100), '🔄');
-    },
-  });
-
-  window.removeEventListener('beforeunload', beforeUnloadHandler);
-
-  // Refresh history so +PDF buttons become PDF↗ links
-  if (typeof renderHistory === 'function') renderHistory();
-
-  _bgPdfRunning = false;
-
-  if (_bgPdfCancelled) {
-    updateBgPill(`Stopped. ${result.succeeded} uploaded.`, 100, '⏸');
-    toast(`Background PDF generation cancelled. ${result.succeeded} uploaded.`, 'success');
-  } else if (result.failed > 0) {
-    updateBgPill(`Done — ${result.succeeded}/${total} uploaded, ${result.failed} failed`, 100, '⚠️', true);
-    toast(`Background PDFs done: ${result.succeeded} uploaded, ${result.failed} failed`, 'error');
-  } else {
-    updateBgPill(`✓ Done — ${result.succeeded} PDFs uploaded`, 100, '✓');
-    toast(`✓ Background PDFs done — ${result.succeeded} uploaded to Drive`, 'success');
-  }
-
-  // Auto-hide pill after 5s on success
-  if (!_bgPdfCancelled && result.failed === 0) {
-    setTimeout(() => hideBgPill(), 5000);
-  }
-}
-
-// Called from the Drive connect / load flow after Drive is ready
-function checkAutoPdfBacklog() {
-  if (!drive.accessToken || !drive.invoicesFolderId) return;
-  const consent = state.settings.auto_generate_pdfs_consent;
-  // PAUSED: auto-background PDF generation is currently disabled because it slows
-  // dispatch operations. Per-invoice Drive PDFs are only generated when the operator
-  // explicitly clicks the bulk "+PDFs to Drive" button. Combined PDF download still works.
-  return;
-  // (legacy behavior preserved below in case we re-enable)
-  if (consent === 'never') return;
-  const missing = findInvoicesMissingPDF();
-  if (missing.length === 0) {
-    hideAutoPdfConsentBanner();
-    return;
-  }
-  if (consent === 'enabled') {
-    setTimeout(() => maybeStartBackgroundPdfGeneration(), 30000);
-  } else if (consent === 'pending') {
-    showAutoPdfConsentBanner(missing.length);
-  }
-}
 
 function printInvoiceById(id) {
   const inv = state.invoices.find(x => x.id === id);
@@ -4652,8 +3956,6 @@ async function bootstrapDriveSession(opts = {}) {
     drive.lastSyncError = null;
     updateSyncUI('connected');
     if (!silent) toast(`Connected${drive.userEmail && drive.userEmail !== 'Connected' ? ' as ' + drive.userEmail : ''}`, 'success');
-    // After Drive is fully ready, check if we should auto-generate missing PDFs in the background
-    setTimeout(() => checkAutoPdfBacklog(), 2000);
   } catch (e) {
     // Real failure — discoverFiles or pull failed. Token is bad.
     console.warn('Drive bootstrap failed:', e.message || e);
@@ -4715,8 +4017,6 @@ async function syncNow() {
     drive.lastSync = new Date();
     updateSyncUI('connected');
     toast('Synced — local + Drive merged', 'success');
-    // Check if there are invoices missing PDFs and offer/auto-start background generation
-    setTimeout(() => checkAutoPdfBacklog(), 1000);
   } catch (e) {
     drive.lastSyncError = e.message;
     updateSyncUI('error', e.message);
@@ -5483,12 +4783,6 @@ async function handleBulkImport(event) {
             <button class="btn btn-sm btn-primary" onclick="confirmBulkImport()" ${valid.length === 0 ? 'disabled' : ''}>Import ${valid.length} Invoices</button>
           </div>
         </div>
-        <div style="margin-bottom: 12px;">
-          <label style="font-size: 12px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
-            <input type="checkbox" id="bulkGeneratePdfs">
-            Also generate & upload individual PDFs to Drive (~2s per invoice — only needed for TrackLens / per-invoice archive)
-          </label>
-        </div>
         <div class="table-wrap" style="max-height: 280px; overflow: auto;">
           <table class="data-table">
             <thead><tr>
@@ -5635,9 +4929,6 @@ async function confirmBulkImport() {
   }
 
   document.getElementById('bulkImportFile').value = '';
-
-  // Capture PDF generation flag before nullifying
-  const generatePdfs = document.getElementById('bulkGeneratePdfs')?.checked === true;
   _bulkParsedRows = null;
 
   // Re-render
@@ -5650,59 +4941,28 @@ async function confirmBulkImport() {
   if (skippedCount > 0) summary += `, skipped ${skippedCount}`;
   toast(summary, 'success');
 
-  // Show post-import panel with print-all option and PDF progress
+  // Show post-import green panel with fast combined-PDF download
   const previewEl = document.getElementById('bulkImportPreview');
   previewEl.classList.remove('hidden');
-  const initialPanelHTML = `
+  previewEl.innerHTML = `
     <div class="card" style="background: var(--success-soft); border: 1px solid var(--success); padding: 14px;">
       <div class="row" style="justify-content: space-between; align-items: center;">
         <div>
           <strong style="color: var(--success);">${summary}</strong>
-          <div class="text-muted" style="font-size: 12px; margin-top: 4px;" id="bulkPdfProgress">
-            ${generatePdfs ? 'Generating PDFs… 0 / ' + importedIds.length : 'PDF generation skipped (checkbox unchecked).'}
+          <div class="text-muted" style="font-size: 12px; margin-top: 4px;">
+            Download a combined PDF of all imported invoices, or open the History tab to manage them.
           </div>
         </div>
         <div class="row" style="gap: 8px;">
-          <button class="btn btn-sm btn-primary" onclick="printImportedBatch(${JSON.stringify(importedIds).replace(/"/g, '&quot;')})">📄 Print All as PDF</button>
+          <button class="btn btn-sm btn-primary" onclick="printImportedBatch(${JSON.stringify(importedIds).replace(/"/g, '&quot;')})">📥 Download combined PDF</button>
           <button class="btn btn-sm" onclick="document.getElementById('bulkImportPreview').classList.add('hidden')">Dismiss</button>
         </div>
       </div>
     </div>
   `;
-  previewEl.innerHTML = initialPanelHTML;
-
-  // Generate PDFs sequentially in background if requested
-  if (generatePdfs && importedIds.length > 0) {
-    bulkGeneratePDFs(importedIds);
-  }
 }
 
 // Generate PDFs for a list of invoice IDs sequentially, updating progress UI.
-async function bulkGeneratePDFs(ids) {
-  const total = ids.length;
-  let done = 0;
-  let failed = 0;
-  const progressEl = document.getElementById('bulkPdfProgress');
-  for (const id of ids) {
-    const inv = state.invoices.find(x => x.id === id);
-    if (!inv) { failed++; done++; continue; }
-    try {
-      await generateAndUploadInvoicePDF(inv);
-    } catch (e) {
-      console.error(`PDF for ${inv.order_id} failed:`, e);
-      failed++;
-    }
-    done++;
-    if (progressEl) {
-      progressEl.textContent = `Generating PDFs… ${done} / ${total}` + (failed > 0 ? ` (${failed} failed)` : '');
-    }
-  }
-  if (progressEl) {
-    progressEl.textContent = `✓ ${total - failed} PDFs uploaded to Drive` + (failed > 0 ? `, ${failed} failed (check console)` : '');
-  }
-  toast(`PDFs done: ${total - failed} uploaded${failed > 0 ? ', ' + failed + ' failed' : ''}`, failed > 0 ? 'error' : 'success');
-}
-
 function printImportedBatch(ids) {
   const invoices = state.invoices.filter(inv => ids.includes(inv.id));
   if (invoices.length === 0) {
